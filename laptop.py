@@ -3,12 +3,24 @@
 """
 This is the code that runs on the Auto Drink Admin server to resd in from the 
 	Arduino and binds to CSH LDAP to modify users' drink credits
-Author: Joseph Batchik <jd@csh.rit.edu>
+Author: JD <jd@csh.rit.edu>
 Date: March 13, 2013
 """
 import serial
 import ldap
 import socket
+import datetime
+import time
+
+def logging(errorMessage, e=None):
+	timeStamp = datetime.datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d %H:%M:%S')
+	day = datetime.datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d')
+	f = open("logs/" + day + ".log", "a")
+
+	f.write(timeStamp + ": " + errorMessage + "\n")
+	if not e == None:
+		f.write("\t" + str(e) + "\n")
+	f.close()
 
 class PyLDAP():
 	"""
@@ -20,16 +32,17 @@ class PyLDAP():
 		"""
 		Sets up a connection to the LDAP server
 		"""
+		f = open("config")
 		self.host = "ldap://ldap.csh.rit.edu"
-		self.base_dn = "uid=jd,ou=Users,dc=csh,dc=rit,dc=edu"
-		self.password = open("config").read().splitlines()[0]
+		self.base_dn = "uid=" + f.readline()[:-1] + ",ou=Users,dc=csh,dc=rit,dc=edu"
+		self.password = f.readline()[:-1]
+		f.close()
 
 		try:
 			self.conn = ldap.initialize(self.host)
 			self.conn.simple_bind_s(self.base_dn, self.password)
 		except ldap.LDAPError, e:
-			print "Error: could not bind to the host: " + self.host + " with base: " + self.base_dn
-			print "\tError: " + str(e)
+			logging("Error: could not bind to the host: " + self.host + " with base: " + self.base_dn, e)
 	
 	def search(self, uid):
 		"""
@@ -47,7 +60,7 @@ class PyLDAP():
 
 		try:
 			ldap_result_id = self.conn.search(search_dn, search_scope, search_filter, None)
-			while 1:
+			while True:
 				result_type, result_data = self.conn.result(ldap_result_id, 0)
 				if result_data == []:
 					break
@@ -56,8 +69,11 @@ class PyLDAP():
 						result_set.append(result_data)
 			return result_set[0][0]
 		except ldap.LDAPError, e:
-			print "Error: could not search through the LDAP server"
-			print "\tError: " + str(e)
+			logging("Error: could not search through the LDAP server", e)
+		except IndexError, e:
+			logging("Error: list index out of range for user data")
+		except Exception, e:
+			logging("Error: unkown error", e)
 
 
 	def getUsersCredits(self, uid):
@@ -73,8 +89,7 @@ class PyLDAP():
 			return int(self.search(uid)[1]['roomNumber'][0])
 			return self.search(uid)[1]['drinkBalance'][0]
 		except Exception, e:
-			print "Error: could not get drink credits for uid: " + uid
-			print "\tError: " + str(e)
+			logging("Error: could not get drink credits for uid: " + uid, e)
 	
 	def incUsersCredits(self, uid, amount):
 		"""
@@ -88,10 +103,9 @@ class PyLDAP():
 			dn = "uid=" + uid + ",dc=csh,dc=rit,dc=edu"
 			mod_attrs = [(ldap.MOD_REPLACE, 'roomNumber', str(new_amount))]
 			self.conn.modify_s(self.base_dn, mod_attrs)
-			
+			logging("Added " + amount + " to " + uid)
 		except Exception, e:
-			print "Error: could not increment by " + str(amount) + " for uid: " + str(uid)
-			print "\tError: " + str(e)
+			logging("Error: could not increment by " + str(amount) + " for uid: " + str(uid), e)
 	def close():
 		con.unbind()
 
@@ -112,45 +126,64 @@ def getUserId(iButtonId):
 		s.connect((TCP_ADDRESS, TCP_PORT))
 		s.send(iButtonId + '\n')
 		data = s.recv(BUFFER_SIZE)
+		logging("Got user " + data + " from iButton")
 		return data	
 	except socket.error, e:
-		print "Error: could not instantiate a sockey to " + TCP_ADDRESS + " and send and recieve user data"
-		print "\tError: " + str(e)
+		logging("Error: could not instantiate a sockey to " + TCP_ADDRESS + " and send and recieve user data", e)
 	finally:
 		s.close()
 
-def setupSerial():
+
+def setupSerial(loutoutTime):
 	ser = serial.Serial(
 		port = '/dev/ttyUSB1',
 		baudrate = 9600,
 		parity = serial.PARITY_ODD,
 		stopbits = serial.STOPBITS_TWO,
 		bytesize = serial.SEVENBITS,
-		timeout=None
+		timeout=logoutTime
 	)
+	ser.open()
 	return ser
+
 
 def main():
 	currentIButtonId = ""
 	userId = ""
 	addMoney = 0
-	conn = PyLDAP()
-	#ser = setupSerial()
+	logouttime = 180 # logout time
+	#ser = setupSerial(logoutTime)
+	loggedIn = False
+	
 
 	while True:
-		for line in ser.readlines():
-			if line.startswith('i:'): #iButton
+
+		line = ser.readline():
+		logging("input from arduino: " + line)
+		if line.startswith('i:'): # iButton
+			if currentIButtonId == line[2:]: # logout
+				loggedIn = False
+			else:
+				loggedIn = True
 				currentIButtonId = line[2:]
 				userId = getUserId(currentIButtonId)
-			elif line.startswith('m:'):
-				addMoney = int(line[2:])
-				conn.incUsersCredits(userId, addMoney)
-						
+		elif line.startswith('m:'): # money
+			addMoney = int(line[2:])
+			conn = PyLDAP()
+			conn.incUsersCredits(userId, addMoney)
+			conn.close()
+		else:
+			logging("improper format of input from arduino: " + line)
+
+		if not loggedIn:
+			logging("logging user " + userId + " out")
+			ser.write("l:") # tells the arduino to stop taking money from the user
+	
 
 	
 if __name__ == "__main__":
 	
-	#getUserId("")
+	getUserId("")
 	#con = PyLDAP()
 	#print con.search("jd")
 	#print con.getUsersCredits("jd")
