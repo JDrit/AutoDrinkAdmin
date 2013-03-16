@@ -5,13 +5,13 @@ Description:
 	that is run from the front end to deal with all the communication. 
 	The thread takes input from the arduino to update LDAP and the GUI.
 Author:
-	JD jd@csh.rit.edu
+	JD <jd@csh.rit.edu>
 """
 
-import wx
 from threading import Thread
 from wx.lib.pubsub import Publisher
 from datetime import datetime, timedelta
+import wx
 import time
 import ldap
 import socket
@@ -45,12 +45,14 @@ class PyLDAP():
 		Sets up a connection to the LDAP server
 		"""
 		f = open("config")
-		self.host = "ldap://ldap.csh.rit.edu"
+		self.host = "ldaps://ldap.csh.rit.edu:636"
 		self.base_dn = "uid=" + f.readline()[:-1] + ",ou=Users,dc=csh,dc=rit,dc=edu"
 		self.password = f.readline()[:-1]
 		f.close()
 
 		try:
+			ldap.set_option(ldap.OPT_X_TLS_REQUIRE_CERT, ldap.OPT_X_TLS_DEMAND)
+			ldap.set_option(ldap.OPT_X_TLS_CACERTFILE, "ca-cert.crt")
 			self.conn = ldap.initialize(self.host)
 			self.conn.simple_bind_s(self.base_dn, self.password)
 		except ldap.LDAPError, e:

@@ -21,7 +21,6 @@ class GUI(wx.Frame):
 			style = wx.FULLSCREEN_ALL, 
 			size = wx.DisplaySize()
 		)
-		
 		panel = wx.Panel(self, wx.ID_ANY)
 		sizer = wx.BoxSizer(wx.VERTICAL)
 		title_font = wx.Font(44, wx.FONTFAMILY_ROMAN, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD)
