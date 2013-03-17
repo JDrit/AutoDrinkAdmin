@@ -91,19 +91,22 @@ class PyLDAP():
 			logging("Error: unkown error", e)
 
 
-	def getUsersCredits(self, uid):
+	def getUsersInformation(self, uid):
 		"""
-		Gets the user's drink credits
+		Gets the user's drink credits and common name
 		Parameters:
 			uid: the user ID to get the drink credits for
 		Returns:
-			the number of drink credits for the user, or None if there is an
+			the number of drink credits for the user and the first common name of the
+			user, or None if there is an
 			error while searching
 		"""
 		try:
-			amount = int(self.search(uid)[1]['roomNumber'][0])
+			data = self.search(uid)[1]
+			amount = int(data['roomNumber'][0])
+			name = data['cn'][0]
 			logging("Info: Successful fetch of " + uid + "'s drink credits: " + str(amount))
-			return amount
+			return amount, name
 		except Exception, e:
 			logging("Error: could not get drink credits for uid: " + uid, e)
 	
@@ -120,13 +123,16 @@ class PyLDAP():
 			amount: the amount to increase the user's drink credits by
 		"""
 		try:
-			old_amount = int(self.getUsersCredits(uid))
+			data = self.getUsersInformation(uid)
+			old_amount = int(data[0])
+			name = data[1]
 			new_amount = old_amount + amount
 			dn = "uid=" + uid + ",dc=csh,dc=rit,dc=edu"
 			mod_attrs = [(ldap.MOD_REPLACE, 'roomNumber', str(new_amount))]
 			self.conn.modify_s(self.base_dn, mod_attrs)
-			logging("Info: Successful modifying " + uid + "'s drink credits from " + str(old_amount) + " to " + str(new_amount))
+			logging("Info: Successful modifying " + name  + "'s drink credits from " + str(old_amount) + " to " + str(new_amount))
 			return new_amount
+		
 		except Exception, e:
 			logging("Error: could not increment by " + str(amount) + " for uid: " + str(uid), e)
 	def close(self):
@@ -176,9 +182,10 @@ class CommThread(Thread):
 			userId: the username of the iButton pressed
 		"""
 		conn = PyLDAP()
-		credits = conn.getUsersCredits(userId)
+		data = conn.getUsersInformation(userId)
+		self.common_name = data[1]	
 		conn.close()
-		Publisher.sendMessage("updateNewUser", (userId, credits))
+		Publisher.sendMessage("updateNewUser", (data[1], data[0]))
 	
 	def appendLog(self, message):
 		"""
@@ -190,7 +197,7 @@ class CommThread(Thread):
 		"""
 		Publisher.sendMessage("appendLog", message)
 	
-	def moneyAdded(self, amount, userId, new_amount):
+	def moneyAdded(self, amount, common_name, new_amount):
 		"""
 		Tells the GUI when money is added to the user's account. This has to be run in a
 			seperate method so that it will be run in the main thread by the GUI.
@@ -199,7 +206,7 @@ class CommThread(Thread):
 			uiserId: the user that the credits were added to
 			new_amount: the new amount of credits that the user has
 		"""
-		Publisher.sendMessage("updateMoneyAdded", (new_amount, "Added " + str(amount) + " drink credits to " + userId + "'s account"))
+		Publisher.sendMessage("updateMoneyAdded", (new_amount, "Added " + str(amount) + " drink credits to " + common_name + "'s account"))
 	
 	def logoutButton(self):
 		"""
@@ -217,6 +224,7 @@ class CommThread(Thread):
 		"""
 		self.currentIButtonId = ""
 		self.userId = ""
+		self.common_name = ""
 		#self.ser.write("l:")
 		Publisher.sendMessage("updateLogout") 
 
@@ -226,11 +234,11 @@ class CommThread(Thread):
 			update the user's information
 		"""
 		self.currentIButtonId = ""
+		self.common_name = ""
 		addMoney = 0
 		logoutTime = 3
 		self.ser = None # setupSerial(logoutTime
 		timeStamp = datetime.now()
-		conn = PyLDAP()
 		
 		while True:
 			data = raw_input("arduino input: ") # self.ser.read(9999)
@@ -250,9 +258,11 @@ class CommThread(Thread):
 							wx.CallAfter(self.newUser, self.userId)
 				elif data.startswith('m:'): # money input
 					addMoney = int(data[2:])
+					conn = PyLDAP()
 					new_amount = conn.incUsersCredits(self.userId, addMoney)
+					conn.close()
 					if not new_amount == None: # good transcation
-						wx.CallAfter(self.moneyAdded, addMoney, self.userId, new_amount)
+						wx.CallAfter(self.moneyAdded, addMoney, self.common_name, new_amount)
 					else:
 						wx.CallAfter(self.logUserOut)
 						wx.CallAfter(self.appendLog, "Could not add money to account, place contact a Drink Admin")
