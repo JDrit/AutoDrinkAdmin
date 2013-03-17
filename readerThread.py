@@ -109,7 +109,12 @@ class PyLDAP():
 	
 	def incUsersCredits(self, uid, amount):
 		"""
-		Increments the user's drink credits by the given amount
+		Increments the user's drink credits by the given amount. The users drink
+			credits are refetched everytime so that if their balance increases 
+			are decreases between the fetch and the increment, it does not
+			cause any problems. This could be exploited by fetching the user's
+			drink credits, buying a drink and then adding to their balance. This
+			would make it so the drink did not cost the user anything.
 		Parameters:
 			uid: the user's ID to search for
 			amount: the amount to increase the user's drink credits by
@@ -143,9 +148,9 @@ def getUserId(iButtonId):
 	try:
 		s.connect((TCP_ADDRESS, TCP_PORT))
 		s.send(iButtonId + '\n')
-		data = s.recv(BUFFER_SIZE)
+		data = s.recv(BUFFER_SIZE).rstrip()
 		logging("Info: Successful TCP request to " + TCP_ADDRESS + " to get user: " + data)
-		return data.rstrip()	
+		return data
 	except socket.error, e:
 		logging("Error: could not instantiate a socket to " + TCP_ADDRESS + " and send and recieve user data", e)
 	finally:
@@ -164,20 +169,22 @@ class CommThread(Thread):
 
 	def newUser(self, userId):
 		"""
-		Tells the gui a user's information when a new iButton is pressed
+		Tells the gui a user's information when a new iButton is pressed. The  
+			Publisher message has to be run in a seperate method so that
+			it will be run in the main thread by the GUI thread.
 		Parameters:
 			userId: the username of the iButton pressed
 		"""
 		conn = PyLDAP()
 		credits = conn.getUsersCredits(userId)
 		conn.close()
-		Publisher.sendMessage("updateUser", userId)
-		Publisher.sendMessage("updateCredits", credits)
-		Publisher.sendMessage("newLog", userId + " has logged been successfully authenticated")
+		Publisher.sendMessage("updateNewUser", (userId, credits))
 	
 	def appendLog(self, message):
 		"""
-		Adds log messages to the GUI
+		Adds log messages to the GUI. The Publisher messgage has to be run in a
+			seperate method so that it will be run in the main thread by the
+			GUI thread.
 		Parameters:
 			message: the log message to add to the gui
 		"""
@@ -185,38 +192,40 @@ class CommThread(Thread):
 	
 	def moneyAdded(self, amount, userId, new_amount):
 		"""
-		Tells the GUI when money is added to the user's account
+		Tells the GUI when money is added to the user's account. This has to be run in a
+			seperate method so that it will be run in the main thread by the GUI.
 		Parameter:
 			amount: the amount of drink credits added
 			uiserId: the user that the credits were added to
 			new_amount: the new amount of credits that the user has
 		"""
-		Publisher.sendMessage("updateCredits", new_amount)
-		Publisher.sendMessage("appendLog", "Added " + str(amount) + " drink credits to " + userId + "'s account")
-	
-	def logout(self):
-		"""
-		Tells the GUI that the user has logged out and should wipe the info
-			off the screen
-		"""
-		Publisher.sendMessage("updateLogout", '5')
+		Publisher.sendMessage("updateMoneyAdded", (new_amount, "Added " + str(amount) + " drink credits to " + userId + "'s account"))
 	
 	def logoutButton(self):
 		"""
 		Called when the logout button is pressed
 		"""
-		wx.CallAfter(self.logout)
 		logging("Info: " + self.userId + " pressed the logout button")
+		wx.CallAfter(self.logUserOut)
+			
+	def logUserOut(self):
+		"""
+		Used to reset all the variables when a user logs out of Auto Drink Admin.
+			This then calls the gui to wipe the screen of all the user's data. 
+			This has to be in its own method so that it can be run by the main
+			GUI thread.
+		"""
+		self.currentIButtonId = ""
 		self.userId = ""
 		#self.ser.write("l:")
-
+		Publisher.sendMessage("updateLogout") 
 
 	def run(self):
 		"""
 		Runs a loop, to read input from the arduino and communicates to the GUI to
 			update the user's information
 		"""
-		currentIButtonId = ""
+		self.currentIButtonId = ""
 		addMoney = 0
 		logoutTime = 3
 		self.ser = None # setupSerial(logoutTime
@@ -228,20 +237,15 @@ class CommThread(Thread):
 			if len(data) > 0: # if there is input from the arduino
 				timeStamp = datetime.now()
 				if data.startswith('i:'): # iButton input
-					if currentIButtonId == data[2:]: # log current user out
-						# self.ser.write("l:")
+					if self.currentIButtonId == data[2:]: # log current user out
 						logging("Info: Logging " + self.userId + " out due to iButton press")
-						self.userId = ""
-						wx.CallAfter(self.logout)
+						wx.CallAfter(self.logUserOut)
 					else: # log in new user
-						currentIButtonId = data[2:]
-						self.userId = getUserId(currentIButtonId)
-						# invalid userId, stops user from entering money if it can not get UserId
-						if not self.userId:
-							# self.ser.write("l:")
-							wx.CallAfter(self.logout)
+						self.currentIButtonId = data[2:]
+						self.userId = getUserId(self.currentIButtonId)
+						if not self.userId: # invalid userId, stops user from entering money if it can not get UserId
+							wx.CallAfter(self.logUserOut)
 							wx.CallAfter(self.appendLog, "Could not authenticate user, please contact a drink admin")
-							self.userId = ""
 						else: # new user has logged in
 							wx.CallAfter(self.newUser, self.userId)
 				elif data.startswith('m:'): # money input
@@ -250,16 +254,13 @@ class CommThread(Thread):
 					if not new_amount == None: # good transcation
 						wx.CallAfter(self.moneyAdded, addMoney, self.userId, new_amount)
 					else:
-						wx.CallAfter(self.logout)
+						wx.CallAfter(self.logUserOut)
 						wx.CallAfter(self.appendLog, "Could not add money to account, place contact a Drink Admin")
-						# self.ser.write("l:")
 				else: # invlaid input
 					logging("Info: invalid input: " + str(data))
 			
-			elif (datetime.now() - timeStamp) > timedelta(minutes = logoutTime):
-				#self.ser.write("l:")
+			elif (datetime.now() - timeStamp) > timedelta(minutes = logoutTime) and not self.userId == "":
 				logging("Info: logging " + self.userId + " out due to timeout")
-				self.userId = ""
-				wx.CallAfter(self.logout)
+				wx.CallAfter(self.logUserOut)
 			
 			time.sleep(0.5)

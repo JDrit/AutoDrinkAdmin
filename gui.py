@@ -30,13 +30,13 @@ class GUI(wx.Frame):
 		title_text.SetFont(title_font)
 		sizer.Add(title_text, 2, wx.ALIGN_CENTER|wx.ALL, 20)
 		
-		self.user_text = wx.StaticText(panel, -1, "User: ________",)
+		self.user_text = wx.StaticText(panel, -1, "    User: ________",)
 		self.user_text.SetFont(reg_font)
-		sizer.Add(self.user_text, 1, 0, 0)
+		sizer.Add(self.user_text, 1, wx.ALL, 20)
 
 		self.credits_text = wx.StaticText(panel, -1, "Credits: ________")
 		self.credits_text.SetFont(reg_font)
-		sizer.Add(self.credits_text, 1, 0, 0)
+		sizer.Add(self.credits_text, 1, wx.ALL, 20)
 		
 		self.logout_but = wx.Button(panel, -1, "LOGOUT")
 		self.logout_but.SetFont(reg_font)
@@ -45,36 +45,37 @@ class GUI(wx.Frame):
 
 		self.log_text = wx.StaticText(panel, -1, "Log:")
 		self.log_text.SetFont(reg_font)
-		sizer.Add(self.log_text, 6, 0, 0)
+		sizer.Add(self.log_text, 6, wx.ALL, 20)
 
 		panel.SetSizerAndFit(sizer)
 
-		Publisher().subscribe(self.updateCredits, "updateCredits")
-		Publisher().subscribe(self.updateUser, "updateUser")
 		Publisher().subscribe(self.appendLog, "appendLog")
-		Publisher().subscribe(self.newLog, "newLog")
 		Publisher().subscribe(self.updateLogout, "updateLogout")
+		Publisher().subscribe(self.newUser, "updateNewUser")
+		Publisher().subscribe(self.moneyAdded, "updateMoneyAdded")
 
 		self.bgThread = readerThread.CommThread()
 
 	def logoutButton(self, event):
 		self.bgThread.logoutButton()
 
-	def updateCredits(self, c):
-		self.credits_text.SetLabel("Credits: " + str(c.data))
-	
-	def updateUser(self, u):
-		self.user_text.SetLabel("User: " + u.data)
-	
 	def appendLog(self, message):
-		self.log_text.SetLabel("Log:\n" + message.data + self.log_text.GetLabel()[4:])
-
-	def newLog(self, message):
-		self.log_text.SetLabel("log:\n" + message.data)
+		self.log_text.SetLabel("Log:\n- " + message.data + self.log_text.GetLabel()[4:])
 	
-	def updateLogout(self, t):
+	def newUser(self, t):
+		tup = t.data
+		self.user_text.SetLabel("    User: " + tup[0])
+		self.credits_text.SetLabel("Credits: " + str(tup[1]))
+		self.log_text.SetLabel("Log:\n- " + tup[0] + " has successfully been logged in")
+	
+	def moneyAdded(self, t):
+		tup = t.data
+		self.credits_text.SetLabel("Credits: " + str(tup[0]))
+		self.log_text.SetLabel("Log:\n- " + tup[1] + self.log_text.GetLabel()[4:])
+			
+	def updateLogout(self, n=None):
 		self.credits_text.SetLabel("Credits: ________")
-		self.user_text.SetLabel("User: ________")
+		self.user_text.SetLabel("    User: ________")
 		self.log_text.SetLabel("Log:")
 
 if __name__ == "__main__":
