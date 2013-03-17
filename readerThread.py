@@ -147,7 +147,7 @@ def getUserId(iButtonId):
 		logging("Info: Successful TCP request to " + TCP_ADDRESS + " to get user: " + data)
 		return data.rstrip()	
 	except socket.error, e:
-		logging("Error: could not instantiate a sockey to " + TCP_ADDRESS + " and send and recieve user data", e)
+		logging("Error: could not instantiate a socket to " + TCP_ADDRESS + " and send and recieve user data", e)
 	finally:
 		s.close()
 
@@ -208,6 +208,7 @@ class CommThread(Thread):
 		wx.CallAfter(self.logout)
 		logging("Info: " + self.userId + " pressed the logout button")
 		self.userId = ""
+		#self.ser.write("l:")
 
 
 	def run(self):
@@ -218,17 +219,17 @@ class CommThread(Thread):
 		currentIButtonId = ""
 		addMoney = 0
 		logoutTime = 3
-		ser = None # setupSerial(logoutTime
+		self.ser = None # setupSerial(logoutTime
 		timeStamp = datetime.now()
 		conn = PyLDAP()
 		
 		while True:
-			data = raw_input("arduino input: ") # ser.read(9999)
+			data = raw_input("arduino input: ") # self.ser.read(9999)
 			if len(data) > 0: # if there is input from the arduino
 				timeStamp = datetime.now()
 				if data.startswith('i:'): # iButton input
 					if currentIButtonId == data[2:]: # log current user out
-						# ser.write("l:")
+						# self.ser.write("l:")
 						logging("Info: Logging " + self.userId + " out due to iButton press")
 						self.userId = ""
 						wx.CallAfter(self.logout)
@@ -237,7 +238,7 @@ class CommThread(Thread):
 						self.userId = getUserId(currentIButtonId)
 						# invalid userId, stops user from entering money if it can not get UserId
 						if not self.userId:
-							# ser.write("l:")
+							# self.ser.write("l:")
 							wx.CallAfter(self.logout)
 							wx.CallAfter(self.appendLog, "Could not authenticate user, please contact a drink admin")
 							self.userId = ""
@@ -249,12 +250,14 @@ class CommThread(Thread):
 					if not new_amount == None: # good transcation
 						wx.CallAfter(self.moneyAdded, addMoney, self.userId, new_amount)
 					else:
-						wx.CallAfter(self.appendLog, "Could not add money to account, find Drink Admin")
+						wx.CallAfter(self.logout)
+						wx.CallAfter(self.appendLog, "Could not add money to account, place contact a Drink Admin")
+						# self.ser.write("l:")
 				else: # invlaid input
 					logging("Info: invalid input: " + str(data))
 			
 			elif (datetime.now() - timeStamp) > timedelta(minutes = logoutTime):
-				#ser.write("l:")
+				#self.ser.write("l:")
 				logging("Info: logging " + self.userId + " out due to timeout")
 				self.userId = ""
 				wx.CallAfter(self.logout)

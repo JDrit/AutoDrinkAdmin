@@ -30,7 +30,7 @@ class GUI(wx.Frame):
 		title_text.SetFont(title_font)
 		sizer.Add(title_text, 2, wx.ALIGN_CENTER|wx.ALL, 20)
 		
-		self.user_text = wx.StaticText(panel, -1, "USER: ________",)
+		self.user_text = wx.StaticText(panel, -1, "User: ________",)
 		self.user_text.SetFont(reg_font)
 		sizer.Add(self.user_text, 1, 0, 0)
 
