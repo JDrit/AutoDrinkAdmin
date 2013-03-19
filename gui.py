@@ -9,7 +9,7 @@ Author:
 """
 import wx
 from wx.lib.pubsub import Publisher
-import readerThread
+import daemon
 
 class GUI(wx.Frame):
 	
@@ -19,55 +19,67 @@ class GUI(wx.Frame):
 			wx.ID_ANY, 
 			"Auto Drink Admin"
 		)
-		panel = wx.Panel(self, wx.ID_ANY)
+		self.panel = wx.Panel(self, wx.ID_ANY)
 		self.ShowFullScreen(True) # sets the gui to full screeen
-		sizer = wx.BoxSizer(wx.VERTICAL)
-		title_font = wx.Font(44, wx.FONTFAMILY_ROMAN, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD)
+		self.sizer = wx.BoxSizer(wx.VERTICAL)
+		title_font = wx.Font(40, wx.FONTFAMILY_ROMAN, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD)
 		reg_font = wx.Font(22, wx.FONTFAMILY_ROMAN, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD)
 		
 		title_bar = wx.BoxSizer(wx.HORIZONTAL)
 		jpg = wx.Image('csh_logo.jpg', wx.BITMAP_TYPE_JPEG).ConvertToBitmap()
 
-		title_bar.Add(wx.StaticBitmap(panel, -1, jpg), 0, wx.ALIGN_LEFT|wx.ALL, 10)
-		title_text = wx.StaticText(panel, -1, "Auto Drink Admin")
+		title_bar.Add(wx.StaticBitmap(self.panel, -1, jpg), 0, wx.ALIGN_LEFT|wx.ALL, 10)
+		title_text = wx.StaticText(self.panel, -1, "Auto Drink Admin")
 		title_text.SetFont(title_font)
-		title_bar.Add(title_text, 2, wx.ALIGN_CENTER, 0)
-		title_bar.Add(wx.StaticBitmap(panel, -1, jpg), 0, wx.ALIGN_RIGHT|wx.ALL, 10)
+		title_bar.Add(title_text, 1, wx.ALIGN_CENTER|wx.ALL, 10)
+		title_bar.Add(wx.StaticBitmap(self.panel, -1, jpg), 0, wx.ALIGN_RIGHT|wx.ALL, 10)
 
-		sizer.Add(title_bar, 2, wx.EXPAND|wx.ALL, 20)
+		self.sizer.Add(title_bar, 2, wx.EXPAND|wx.ALL, 5)
 			
-		self.user_text = wx.StaticText(panel, -1, "    User: ________",)
+		self.user_text = wx.StaticText(self.panel, -1, "    User: ________",)
 		self.user_text.SetFont(reg_font)
-		sizer.Add(self.user_text, 0, wx.ALL, 20)
+		self.sizer.Add(self.user_text, 0, wx.ALL, 10)
 
-		self.credits_text = wx.StaticText(panel, -1, "Credits: ________")
+		self.credits_text = wx.StaticText(self.panel, -1, "Credits: ________")
 		self.credits_text.SetFont(reg_font)
-		sizer.Add(self.credits_text, 0, wx.ALL, 20)
+		self.sizer.Add(self.credits_text, 0, wx.ALL, 10)
 		
-		self.logout_but = wx.Button(panel, -1, "LOGOUT")
-		self.logout_but.SetFont(reg_font)
+		button_bar = wx.BoxSizer(wx.HORIZONTAL)
+			
+		self.logout_but = wx.Button(self.panel, -1, "LOGOUT")
+		self.logout_but.SetFont(title_font)
 		self.logout_but.Bind(wx.EVT_BUTTON, self.logoutButton)
-		sizer.Add(self.logout_but, 1, wx.ALL|wx.EXPAND, 20)
+		button_bar.Add(self.logout_but, 1, wx.ALL|wx.EXPAND, 10)
 
-		self.log_text = wx.StaticText(panel, -1, "Log:")
+		self.open_but = wx.Button(self.panel, -1, "OPEN")
+		self.open_but.SetFont(title_font)
+		self.open_but.Bind(wx.EVT_BUTTON, self.openButton)
+		button_bar.Add(self.open_but, 1, wx.ALL|wx.EXPAND, 10)
+		self.sizer.Add(button_bar, 1, wx.ALL|wx.EXPAND, 10)
+			
+		self.log_text = wx.StaticText(self.panel, -1, "Log:")
 		self.log_text.SetFont(reg_font)
-		sizer.Add(self.log_text, 10, wx.ALL, 20)
+		self.sizer.Add(self.log_text, 10, wx.TOP|wx.LEFT, 20)
 
-		panel.SetSizerAndFit(sizer)
+		self.panel.SetSizerAndFit(self.sizer)
+		
 
 		# sets up the listeners to listen for the messages from the background thread
 		Publisher().subscribe(self.appendLog, "appendLog")
 		Publisher().subscribe(self.updateLogout, "updateLogout")
 		Publisher().subscribe(self.newUser, "updateNewUser")
 		Publisher().subscribe(self.moneyAdded, "updateMoneyAdded")
-		self.bgThread = readerThread.CommThread()
+		self.daemon = daemon.CommThread()
 
 	def logoutButton(self, event):
 		"""
 		Used when the logout button is pressed. This talks to the background thread
 			owned by the GUI.
 		"""
-		self.bgThread.logoutButton()
+		self.daemon.logoutButton()
+	
+	def openButton(self, event):
+		self.daemon.openButton()
 
 	def appendLog(self, message):
 		"""
@@ -88,6 +100,7 @@ class GUI(wx.Frame):
 		tup = t.data
 		self.user_text.SetLabel("    User: " + tup[0])
 		self.credits_text.SetLabel("Credits: " + str(tup[1]))
+		self.open_but.Show(tup[2])
 		self.log_text.SetLabel("Log:\n- " + tup[0] + " has successfully been logged in")
 	
 	def moneyAdded(self, t):
@@ -111,6 +124,7 @@ class GUI(wx.Frame):
 		self.credits_text.SetLabel("Credits: ________")
 		self.user_text.SetLabel("    User: ________")
 		self.log_text.SetLabel("Log:")
+		self.open_but.Hide()
 
 if __name__ == "__main__":
 	app = wx.PySimpleApp()
