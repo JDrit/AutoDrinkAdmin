@@ -75,8 +75,10 @@ class CommThread(Thread):
 	
 	def openButton(self):
 		if self.moneyDoorOpen:
+			pyLDAP.logging("Info: " + self.userId + " opened the money door")
 			self.ser("C")
 		else:
+			pyLDAP.logging("Info: " + self.userId + " closed the money door")
 			self.ser("O")
 		self.moneyDoorOpen = not self.moneyDoorOpen
 			
@@ -145,8 +147,13 @@ class CommThread(Thread):
 				else: # invlaid input
 					pyLDAP.logging("Info: invalid input: " + str(data))
 			
+			# the user has been inactive for too long
 			elif (datetime.now() - timeStamp) > timedelta(minutes = logoutTime) and not self.userId == "":
 				pyLDAP.logging("Info: logging " + userId + " out due to timeout")
+				if self.moneyDoorOpen:
+					self.moneyDoorOpen = False
+					pyLDAP.logging("Info: closing money door due to timeout")
+					#ser.write("C")
 				wx.CallAfter(self.logUserOut)
 			
 			time.sleep(0.5)
