@@ -14,7 +14,6 @@ from datetime import datetime, timedelta
 import wx
 import time
 import ldap
-import socket
 import pyLDAP
 
 class CommThread(Thread):

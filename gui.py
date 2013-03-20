@@ -44,18 +44,15 @@ class GUI(wx.Frame):
 		self.credits_text.SetFont(reg_font)
 		self.sizer.Add(self.credits_text, 0, wx.ALL, 10)
 		
-		button_bar = wx.BoxSizer(wx.HORIZONTAL)
-			
 		self.logout_but = wx.Button(self.panel, -1, "LOGOUT")
 		self.logout_but.SetFont(title_font)
 		self.logout_but.Bind(wx.EVT_BUTTON, self.logoutButton)
-		button_bar.Add(self.logout_but, 1, wx.ALL|wx.EXPAND, 10)
+		sizer.Add(self.logout_but, 1, wx.ALL|wx.EXPAND, 10)
 
 		self.open_but = wx.Button(self.panel, -1, "OPEN")
 		self.open_but.SetFont(title_font)
 		self.open_but.Bind(wx.EVT_BUTTON, self.openButton)
-		button_bar.Add(self.open_but, 1, wx.ALL|wx.EXPAND, 10)
-		self.sizer.Add(button_bar, 1, wx.ALL|wx.EXPAND, 10)
+		elf.sizer.Add(self.open_but, 1, wx.ALL|wx.EXPAND, 10)
 			
 		self.log_text = wx.StaticText(self.panel, -1, "Log:")
 		self.log_text.SetFont(reg_font)
