@@ -123,6 +123,7 @@ class GUI(wx.Frame):
 		self.log_text.SetLabel("Log:")
 		self.open_but.Hide()
 
+
 if __name__ == "__main__":
 	app = wx.PySimpleApp()
 	frame = GUI().Show()

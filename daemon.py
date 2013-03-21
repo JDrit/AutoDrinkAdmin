@@ -116,6 +116,7 @@ class CommThread(Thread):
 		)
 		if self.ser.isOpen():
 			self.ser.close()
+		
 		self.ser.open()
 		timeStamp = datetime.now()
 		

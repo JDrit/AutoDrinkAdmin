@@ -104,7 +104,6 @@ class PyLDAP():
 		try:
 			data = self.search(uid)[1]
 			amount = int(data['roomNumber'][0])
-			name = data['cn'][0]
 			drinkAdmin = int(data['drinkAdmin'][0])
 			if drinkAdmin == 1:
 				drinkAdmin = True
