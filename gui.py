@@ -47,12 +47,12 @@ class GUI(wx.Frame):
 		self.logout_but = wx.Button(self.panel, -1, "LOGOUT")
 		self.logout_but.SetFont(title_font)
 		self.logout_but.Bind(wx.EVT_BUTTON, self.logoutButton)
-		sizer.Add(self.logout_but, 1, wx.ALL|wx.EXPAND, 10)
+		self.sizer.Add(self.logout_but, 1, wx.ALL|wx.EXPAND, 10)
 
 		self.open_but = wx.Button(self.panel, -1, "OPEN")
 		self.open_but.SetFont(title_font)
 		self.open_but.Bind(wx.EVT_BUTTON, self.openButton)
-		elf.sizer.Add(self.open_but, 1, wx.ALL|wx.EXPAND, 10)
+		self.sizer.Add(self.open_but, 1, wx.ALL|wx.EXPAND, 10)
 			
 		self.log_text = wx.StaticText(self.panel, -1, "Log:")
 		self.log_text.SetFont(reg_font)

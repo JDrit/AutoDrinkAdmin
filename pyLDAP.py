@@ -105,7 +105,7 @@ class PyLDAP():
 			data = self.search(uid)[1]
 			amount = int(data['roomNumber'][0])
 			name = data['cn'][0]
-			drinkAdmin = data['drinkAdmin'][0]
+			drinkAdmin = int(data['drinkAdmin'][0])
 			if drinkAdmin == 1:
 				drinkAdmin = True
 			else:
@@ -113,7 +113,7 @@ class PyLDAP():
 			logging("Info: Successful fetch of " + uid + "'s drink credits: " + str(amount))
 			return amount, drinkAdmin
 		except Exception, e:
-			logging("Error: could not get drink credits for uid: " + uid, e)
+			logging("Error: could not get drink credits for uid: " + str(uid), e)
 	
 	def incUsersCredits(self, uid, amount):
 		"""
