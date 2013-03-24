@@ -55,7 +55,7 @@ class CommThread(Thread):
 		"""
 		Publisher.sendMessage("appendLog", message)
 	
-	def moneyAdded(self, amount, uid, new_amount):
+	def moneyAdded(self, amount, new_amount):
 		"""
 		Tells the GUI when money is added to the user's account. This has to be run in a
 			seperate method so that it will be run in the main thread by the GUI.
@@ -64,7 +64,7 @@ class CommThread(Thread):
 			uiserId: the user that the credits were added to
 			new_amount: the new amount of credits that the user has
 		"""
-		Publisher.sendMessage("updateMoneyAdded", (new_amount, "Added " + str(amount) + " drink credits to " + uid + "'s account"))
+		Publisher.sendMessage("updateMoneyAdded", (new_amount, "Added " + str(amount) + " drink credits to " + self.userId + "'s account"))
 	
 	def logoutButton(self):
 		"""
@@ -76,7 +76,7 @@ class CommThread(Thread):
 	def openButton(self):
 		if not self.moneyDoorOpen:
 			pyLDAP.logging("Info: " + str(self.userId) + " opened the money door")
-			self.ser("C")
+			self.ser.write("C")
 		else:
 			pyLDAP.logging("Info: " + str(self.userId) + " closed the money door")
 			self.ser("O")
@@ -90,8 +90,7 @@ class CommThread(Thread):
 			GUI thread.
 		"""
 		self.currentIButtonId = None
-		self.userId = None
-		self.ser.write("l:")
+		self.ser.write("L")
 		Publisher.sendMessage("updateLogout") 
 
 	def run(self):
@@ -101,18 +100,13 @@ class CommThread(Thread):
 		"""
 		self.currentIButtonId = None
 		self.moneyDoorOpen = False
-		userId = None
 		addMoney = 0
-		logoutTime = 1
-		#self.ser = None
+		logoutTime = 3
 		
 		self.ser = serial.Serial(
-			port = '/dev/ttyACM0',
+			port = '/dev/ttyACM1',
 			baudrate = 9600,
-			#parity = serial.PARITY_ODD,
-			#stopbits = serial.STOPBITS_TWO,
-			#bytesize = serial.SEVENBITS,
-			timeout = 2 
+			timeout = 0 
 		)
 		if self.ser.isOpen():
 			self.ser.close()
@@ -122,7 +116,8 @@ class CommThread(Thread):
 		
 		while True:
 			data = self.ser.read(999)#raw_input("arduino input: ") # self.ser.read(9999)
-			if len(data) > 0: # if there is input from the arduino
+			if len(data) > 1: # if there is input from the arduino
+				print data
 				if data.startswith('i:'): # iButton input
 					if not data[2:].upper() == self.currentIButtonId:
 						self.currentIButtonId = data[2:].upper()
@@ -137,23 +132,23 @@ class CommThread(Thread):
 					addMoney = int(data[2:])
 					timeStamp = datetime.now()
 					conn = pyLDAP.PyLDAP()
-					new_amount = conn.incUsersCredits(userId, addMoney)
+					new_amount = conn.incUsersCredits(self.userId, addMoney)
 					conn.close()
-					if not new_amount == None: # good transcation
-						wx.CallAfter(self.moneyAdded, addMoney, userId, new_amount)
+					if new_amount: # good transcation
+						wx.CallAfter(self.moneyAdded, addMoney, new_amount)
 					else:
 						wx.CallAfter(self.logUserOut)
 						wx.CallAfter(self.appendLog, "Could not add money to account, place contact a Drink Admin")
 				else: # invlaid input
-					pyLDAP.logging("Info: invalid input: " + str(data))
+					pyLDAP.logging("Error: invalid input: " + str(data))
 			
 			# the user has been inactive for too long
 			if (datetime.now() - timeStamp) > timedelta(minutes = logoutTime) and self.userId:
-				pyLDAP.logging("Info: logging " + str(userId) + " out due to timeout")
+				pyLDAP.logging("Info: logging " + str(self.userId) + " out due to timeout")
 				if self.moneyDoorOpen:
 					self.moneyDoorOpen = False
 					pyLDAP.logging("Info: closing money door due to timeout")
 					ser.write("C")
 				wx.CallAfter(self.logUserOut)
+			time.sleep(0.5) # needed or else the inputs will not be read correctly
 			
-			time.sleep(0.5)

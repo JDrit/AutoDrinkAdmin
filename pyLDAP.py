@@ -69,7 +69,7 @@ class PyLDAP():
 		"""
 		search_dn = "dc=csh,dc=rit,dc=edu"
 		search_scope = ldap.SCOPE_SUBTREE
-		search_filter = "uid=" + uid
+		search_filter = "uid=" + str(uid)
 		result_set = []
 
 		try:
@@ -81,7 +81,7 @@ class PyLDAP():
 				else:
 					if result_type == ldap.RES_SEARCH_ENTRY:
 						result_set.append(result_data)
-			logging("Info: successful search for " + uid)
+			logging("Info: successful search for " + str(uid))
 			return result_set[0][0]
 		except ldap.LDAPError, e:
 			logging("Error: could not search through the LDAP server", e)
@@ -89,7 +89,7 @@ class PyLDAP():
 			logging("Error: list index out of range for user data")
 		except Exception, e:
 			logging("Error: unkown error", e)
-
+		
 
 	def getUsersInformation(self, uid):
 		"""
@@ -102,6 +102,9 @@ class PyLDAP():
 			or None if it errors out
 		"""
 		try:
+			if not uid:
+				logging("Error: User ID is None")
+				return
 			data = self.search(uid)[1]
 			amount = int(data['roomNumber'][0])
 			drinkAdmin = int(data['drinkAdmin'][0])
@@ -109,7 +112,7 @@ class PyLDAP():
 				drinkAdmin = True
 			else:
 				drinkAdmin = False
-			logging("Info: Successful fetch of " + uid + "'s drink credits: " + str(amount))
+			logging("Info: Successful fetch of " + str(uid) + "'s drink credits: " + str(amount))
 			return amount, drinkAdmin
 		except Exception, e:
 			logging("Error: could not get drink credits for uid: " + str(uid), e)
@@ -128,6 +131,8 @@ class PyLDAP():
 		"""
 		try:
 			data = self.getUsersInformation(uid)
+			if not data:
+				return
 			old_amount = int(data[0])
 			new_amount = old_amount + amount
 			dn = "uid=" + uid + ",dc=csh,dc=rit,dc=edu"
