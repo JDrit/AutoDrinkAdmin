@@ -90,6 +90,7 @@ class CommThread(Thread):
 			GUI thread.
 		"""
 		self.currentIButtonId = None
+		self.userId = None
 		self.ser.write("L")
 		Publisher.sendMessage("updateLogout") 
 
@@ -117,9 +118,8 @@ class CommThread(Thread):
 		while True:
 			data = self.ser.read(999)#raw_input("arduino input: ") # self.ser.read(9999)
 			if len(data) > 1: # if there is input from the arduino
-				print data
 				if data.startswith('i:'): # iButton input
-					if not data[2:].upper() == self.currentIButtonId:
+					if not data[2:].upper() == self.currentIButtonId: # if not currently logged in user
 						self.currentIButtonId = data[2:].upper()
 						timeStamp = datetime.now()
 						self.userId = pyLDAP.getUserId(self.currentIButtonId)
@@ -129,16 +129,20 @@ class CommThread(Thread):
 						else:
 							wx.CallAfter(self.newUser)
 				elif data.startswith('m:'): # money input
-					addMoney = int(data[2:])
+					addMoney += int(data[2:])
 					timeStamp = datetime.now()
 					conn = pyLDAP.PyLDAP()
 					new_amount = conn.incUsersCredits(self.userId, addMoney)
 					conn.close()
 					if new_amount: # good transcation
+						addMoney = 0
 						wx.CallAfter(self.moneyAdded, addMoney, new_amount)
 					else:
-						wx.CallAfter(self.logUserOut)
-						wx.CallAfter(self.appendLog, "Could not add money to account, place contact a Drink Admin")
+						if not self.userId: # if a user adds money while no one is logged in
+							wx.CallAfter(self.appendLog, "No user logged in, log in to add drink credits to your account")
+						else:
+							addMoney = 0
+							wx.CallAfter(self.appendLog, "Could not add money to account, place contact a Drink Admin")
 				else: # invlaid input
 					pyLDAP.logging("Error: invalid input: " + str(data))
 			
