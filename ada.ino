@@ -10,38 +10,49 @@ char rfid_id[RFID_ID_SIZE];
 
 const int coinInt = 0; 
 //Attach coinInt to Interrupt Pin 0 (Digital Pin 2). Pin 3 = Interrpt Pin 1.
+const int billInt = 1;
 
 volatile int coinsValue = 0;
-//Set the coinsValue to a Volatile float
+volatile int billsValue = 0;
+//Set the coinsValue and billsValue to a Volatile float
 //Volatile as this variable changes any time the Interrupt is triggered
-int coinsChange = 0;                  
-//A Coin has been inserted flag
+int coinsChange = 0; //A Coin has been inserted flag
+int billsChange = 0; //A bill has been inserted flag
 
-unsigned long timeOfLastPulse;
-
+unsigned long timeOfLastPulseCoins;
+unsigned long timeOfLastPulseBills;
 
 void setup() 
 {  
   Serial.begin(9600);
   //Serial.println("");
   
-  attachInterrupt(coinInt, coinInserted, RISING);   
+  attachInterrupt(coinInt, coinInserted, RISING);
+  attachInterrupt(billInt, billInserted, RISING);
 //If coinInt goes HIGH (a Pulse), call the coinInserted function
 //An attachInterrupt will always trigger, even if your using delays
-  timeOfLastPulse = millis();
+  timeOfLastPulseCoins = millis();
+  timeOfLastPulseBills = millis();
   
 }
 
 void coinInserted()    
 //The function that is called every time it recieves a pulse
 {
-  coinsValue = coinsValue + 1;  
+  coinsValue += 1;  
 //As we set the Pulse to represent 5p or 5c we add this to the coinsValue
   coinsChange = 1;                           
 //Flag that there has been a coin inserted
   
-  timeOfLastPulse = millis();
+  timeOfLastPulseCoins = millis();
 }
+
+void billInserted()
+{
+  billsValue += 100;
+  billsChange = 1;
+  timeOfLastPulseBills = millis();
+}  
 
 void loop() {
   if(Serial.available())
@@ -82,7 +93,7 @@ void loop() {
   }
   
   
-  if(coinsChange == 1 && millis() - timeOfLastPulse > 1000)
+  if(coinsChange == 1 && millis() - timeOfLastPulseCoins > 1000)
 //Check if a coin has been Inserted
   {
     coinsChange = 0;              
@@ -91,6 +102,13 @@ void loop() {
     Serial.print("m:" + String(coinsValue));
 //    Serial.println(coinsValue);    
 //Print the Value of coins inserted
-  coinsValue=0;
+    coinsValue=0;
+  }
+  
+  if (billsChange == 1 && millis() - timeOfLastPulseBills > 1000)
+  {
+    billsChange = 1;
+    Serial.print("m:" + String(billsValue));
+    billsValue = 0;
   }
 }  
