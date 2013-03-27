@@ -11,6 +11,7 @@ Author:
 from threading import Thread
 from wx.lib.pubsub import Publisher
 from datetime import datetime, timedelta
+import ConfigParser
 import wx
 import time
 import ldap
@@ -44,16 +45,16 @@ class PyLDAP():
 		"""
 		Sets up a connection to the LDAP server
 		"""
-		f = open("config")
-		self.host = "ldaps://ldap.csh.rit.edu:636"
-		self.base_dn = "uid=" + f.readline()[:-1] + ",ou=Users,dc=csh,dc=rit,dc=edu"
-		self.password = f.readline()[:-1]
-		f.close()
+		config = ConfigParser.ConfigParser()
+		config.read("config")
+		self.host = config.get("Settings", "host")
+		self.base_dn = "uid=" + config.get("Settings", "username") + ",ou=Users,dc=csh,dc=rit,dc=edu"
+		self.password = config.get("Settings", "password")
 		self.creditsField = 'roomNumber' # the field that stores users' drink credits
 
 		try:
 			ldap.set_option(ldap.OPT_X_TLS_REQUIRE_CERT, ldap.OPT_X_TLS_DEMAND)
-			ldap.set_option(ldap.OPT_X_TLS_CACERTFILE, "ca-cert.crt")
+			ldap.set_option(ldap.OPT_X_TLS_CACERTFILE, config.get("Settings", "cert"))
 			self.conn = ldap.initialize(self.host)
 			self.conn.simple_bind_s(self.base_dn, self.password)
 		except ldap.LDAPError, e:
@@ -117,7 +118,7 @@ class PyLDAP():
 				drinkAdmin = True
 			else:
 				drinkAdmin = False
-			logging("Info: Successful fetch of " + str(uid) + "'s drink credits: " + str(amount))
+			logging("Info: Successful fetch of " + str(uid) + "'s drink credits: " + str(amount) + " and drink admin status")
 			return amount, drinkAdmin
 		except ldap.LDAPError, e:
 			logging("Error: LDAP error while trying to get " + str(uid) + "'s information", e)
