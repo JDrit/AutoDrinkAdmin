@@ -29,7 +29,7 @@ def logging(errorMessage, e=None):
 	f = open("logs/" + day + ".log", "a")
 
 	f.write(timeStamp + ": " + errorMessage + "\n")
-	#print errorMessage
+	print errorMessage
 	if not e == None:
 		f.write("\t" + str(e) + "\n")
 	f.close()
@@ -82,14 +82,15 @@ class PyLDAP():
 				else:
 					if result_type == ldap.RES_SEARCH_ENTRY:
 						result_set.append(result_data)
+			if result_set == []:
+				logging("Error: " + str(uid) + " does not exist in the LDAP server")
+				return
 			logging("Info: successful search for " + str(uid))
 			return result_set[0][0]
 		except ldap.LDAPError, e:
-			logging("Error: could not search through the LDAP server", e)
-		except IndexError, e:
-			logging("Error: list index out of range for user data")
+			logging("Error: LDAP error while searching for " + str(uid), e)
 		except Exception, e:
-			logging("Error: unkown error", e)
+			logging("Error: unkown error while searching for " + str(uid), e)
 		
 
 	def getUsersInformation(self, uid):
@@ -107,6 +108,9 @@ class PyLDAP():
 				logging("Error: User ID is None")
 				return
 			data = self.search(uid)[1]
+			if not data:
+				logging("Error: no LDAP data for " + str(uid))
+				return
 			amount = int(data[self.creditsField][0])
 			drinkAdmin = int(data['drinkAdmin'][0])
 			if drinkAdmin == 1:
@@ -115,6 +119,8 @@ class PyLDAP():
 				drinkAdmin = False
 			logging("Info: Successful fetch of " + str(uid) + "'s drink credits: " + str(amount))
 			return amount, drinkAdmin
+		except ldap.LDAPError, e:
+			logging("Error: LDAP error while trying to get " + str(uid) + "'s information", e)
 		except Exception, e:
 			logging("Error: could not get drink credits for uid: " + str(uid), e)
 	
@@ -136,13 +142,19 @@ class PyLDAP():
 		try:
 			data = self.getUsersInformation(uid)
 			if not data:
+				logging("Error: could not increment " + str(uid) + "'s drink credits since could not get LDAP data for user")
 				return
 			old_amount = int(data[0])
 			new_amount = old_amount + amount
 			mod_attrs = [(ldap.MOD_REPLACE, self.creditsField, str(new_amount))]
-			self.conn.modify_s(self.base_dn, mod_attrs)
+			dn = "uid=" + str(uid) + ",ou=Users,dc=csh,dc=rit,dc=edu"
+			self.conn.modify_s(dn, mod_attrs)
 			logging("Info: Successful increment of " + uid  + "'s drink credits from " + str(old_amount) + " to " + str(new_amount))
 			return new_amount
+		except ldap.INSUFFICIENT_ACCESS, e:
+			logging("Error: Insufficient access to increments the drink credits for " + str(uid) + " by " + str(amount) ,e)
+		except ldap.LDAPError, e:
+			logging("Error: LDAP error while trying to increment " + str(uid) + "'s by " + str(amount), e)
 		except Exception, e:
 			logging("Error: could not increment by " + str(amount) + " for uid: " + str(uid), e)
 
@@ -158,11 +170,18 @@ class PyLDAP():
 		"""
 		try:
 			mod_attrs = [(ldap.MOD_REPLACE, self.creditsField, str(amount))]
-			self.conn.modify_s(self.base_dn, mod_attrs)
+			dn = "uid=" + str(uid) + ",ou=Users,dc=csh,dc=rit,dc=edu"
+			self.conn.modify_s(dn, mod_attrs)
 			logging("Info: Successful set of " + str(uid) + "'s drink credits to " + str(amount))
 			return amount
+		except ldap.INSUFFICIENT_ACCESS, e:
+			logging("Error: Insufficient access to set the " + str(uid) + "'s drink credits to " + str(amount), e)
+		except ldap.NO_SUCH_OBJECT, e:
+			logging("Error: the user " + str(uid) + " does not exist in LDAP", e)
+		except ldap.LDAPError, e:
+			logging("Error: LDAP error while trying to set " + str(uid) + "'s drink credits to " + str(amount), e)
 		except Exception, e:
-			Logging("Error: could not set " + str(uid) + "'s drink credits to " + str(amount)) 			
+			Logging("Error: could not set " + str(uid) + "'s drink credits to " + str(amount), e) 			
 
 	def close(self):
 		self.conn.unbind()
