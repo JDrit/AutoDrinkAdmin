@@ -49,6 +49,7 @@ class PyLDAP():
 		self.base_dn = "uid=" + f.readline()[:-1] + ",ou=Users,dc=csh,dc=rit,dc=edu"
 		self.password = f.readline()[:-1]
 		f.close()
+		self.creditsField = 'roomNumber' # the field that stores users' drink credits
 
 		try:
 			ldap.set_option(ldap.OPT_X_TLS_REQUIRE_CERT, ldap.OPT_X_TLS_DEMAND)
@@ -106,7 +107,7 @@ class PyLDAP():
 				logging("Error: User ID is None")
 				return
 			data = self.search(uid)[1]
-			amount = int(data['roomNumber'][0])
+			amount = int(data[self.creditsField][0])
 			drinkAdmin = int(data['drinkAdmin'][0])
 			if drinkAdmin == 1:
 				drinkAdmin = True
@@ -128,6 +129,9 @@ class PyLDAP():
 		Parameters:
 			uid: the user's ID to search for
 			amount: the amount to increase the user's drink credits by
+		Returns:
+			the new amount of drink credits for the person if the change was successful,
+				None if the change failed
 		"""
 		try:
 			data = self.getUsersInformation(uid)
@@ -135,14 +139,31 @@ class PyLDAP():
 				return
 			old_amount = int(data[0])
 			new_amount = old_amount + amount
-			dn = "uid=" + uid + ",dc=csh,dc=rit,dc=edu"
-			mod_attrs = [(ldap.MOD_REPLACE, 'roomNumber', str(new_amount))]
+			mod_attrs = [(ldap.MOD_REPLACE, self.creditsField, str(new_amount))]
 			self.conn.modify_s(self.base_dn, mod_attrs)
-			logging("Info: Successful modifying " + uid  + "'s drink credits from " + str(old_amount) + " to " + str(new_amount))
+			logging("Info: Successful increment of " + uid  + "'s drink credits from " + str(old_amount) + " to " + str(new_amount))
 			return new_amount
-		
 		except Exception, e:
 			logging("Error: could not increment by " + str(amount) + " for uid: " + str(uid), e)
+
+	def setUsersCredits(self, uid, amount):
+		"""
+		Sets the user's drink credits to a given amount
+		Parameters:
+			uid: the user ID for the person to have their drink balance changed
+			amount: the amount of drink credits to set the person's balance to
+		Returns:
+			the new amount of drink credits for the user if the LDAP change was successful, 
+				None if the change failed
+		"""
+		try:
+			mod_attrs = [(ldap.MOD_REPLACE, self.creditsField, str(amount))]
+			self.conn.modify_s(self.base_dn, mod_attrs)
+			logging("Info: Successful set of " + str(uid) + "'s drink credits to " + str(amount))
+			return amount
+		except Exception, e:
+			Logging("Error: could not set " + str(uid) + "'s drink credits to " + str(amount)) 			
+
 	def close(self):
 		self.conn.unbind()
 
