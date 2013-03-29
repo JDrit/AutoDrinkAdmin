@@ -30,7 +30,7 @@ def logging(errorMessage, e=None):
 	f = open("logs/" + day + ".log", "a")
 
 	f.write(timeStamp + ": " + errorMessage + "\n")
-	print errorMessage
+	print errorMessage, e
 	if not e == None:
 		f.write("\t" + str(e) + "\n")
 	f.close()
@@ -48,17 +48,19 @@ class PyLDAP():
 		config = ConfigParser.ConfigParser()
 		config.read("config")
 		self.host = config.get("Settings", "host")
-		self.base_dn = "uid=" + config.get("Settings", "username") + ",ou=Users,dc=csh,dc=rit,dc=edu"
+		self.base_dn = config.get("Settings", "base_dn")
+		self.bind_dn = "uid=" + config.get("Settings", "username") + "," + self.base_dn
 		self.password = config.get("Settings", "password")
 		self.creditsField = 'roomNumber' # the field that stores users' drink credits
 
 		try:
-			ldap.set_option(ldap.OPT_X_TLS_REQUIRE_CERT, ldap.OPT_X_TLS_DEMAND)
-			ldap.set_option(ldap.OPT_X_TLS_CACERTFILE, config.get("Settings", "cert"))
+			if not config.get("Settings", "cert") == "": # if there is a cert to use
+				ldap.set_option(ldap.OPT_X_TLS_REQUIRE_CERT, ldap.OPT_X_TLS_DEMAND)
+				ldap.set_option(ldap.OPT_X_TLS_CACERTFILE, config.get("Settings", "cert"))
 			self.conn = ldap.initialize(self.host)
-			self.conn.simple_bind_s(self.base_dn, self.password)
+			self.conn.simple_bind_s(self.bind_dn, self.password)
 		except ldap.LDAPError, e:
-			logging("Error: could not bind to the host: " + self.host + " with base: " + self.base_dn, e)
+			logging("Error: could not bind to the host: " + self.host + " with bind: " + self.bind_dn, e)
 	
 	def search(self, uid):
 		"""
@@ -69,13 +71,12 @@ class PyLDAP():
 			the data stored in LDAP for the given user, None if there
 			is an error searching LDAP
 		"""
-		search_dn = "dc=csh,dc=rit,dc=edu"
 		search_scope = ldap.SCOPE_SUBTREE
 		search_filter = "uid=" + str(uid)
 		result_set = []
 
 		try:
-			ldap_result_id = self.conn.search(search_dn, search_scope, search_filter, None)
+			ldap_result_id = self.conn.search(self.base_dn, search_scope, search_filter, None)
 			while True:
 				result_type, result_data = self.conn.result(ldap_result_id, 0)
 				if result_data == []:
