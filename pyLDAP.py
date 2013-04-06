@@ -16,6 +16,7 @@ import wx
 import time
 import ldap
 import socket
+import mySQLLogger
 
 def logging(errorMessage, e=None):
 	"""
@@ -47,16 +48,16 @@ class PyLDAP():
 		"""
 		config = ConfigParser.ConfigParser()
 		config.read("config")
-		self.host = config.get("Settings", "host")
-		self.base_dn = config.get("Settings", "base_dn")
-		self.bind_dn = "uid=" + config.get("Settings", "username") + "," + self.base_dn
-		self.password = config.get("Settings", "password")
+		self.host = config.get("LDAP", "host")
+		self.base_dn = config.get("LDAP", "base_dn")
+		self.bind_dn = "uid=" + config.get("LDAP", "username") + "," + self.base_dn
+		self.password = config.get("LDAP", "password")
 		self.creditsField = 'roomNumber' # the field that stores users' drink credits
 
 		try:
-			if not config.get("Settings", "cert") == "": # if there is a cert to use
+			if not config.get("LDAP", "cert") == "": # if there is a cert to use
 				ldap.set_option(ldap.OPT_X_TLS_REQUIRE_CERT, ldap.OPT_X_TLS_DEMAND)
-				ldap.set_option(ldap.OPT_X_TLS_CACERTFILE, config.get("Settings", "cert"))
+				ldap.set_option(ldap.OPT_X_TLS_CACERTFILE, config.get("LDAP", "cert"))
 			self.conn = ldap.initialize(self.host)
 			self.conn.simple_bind_s(self.bind_dn, self.password)
 		except ldap.LDAPError, e:
@@ -152,6 +153,8 @@ class PyLDAP():
 			dn = "uid=" + str(uid) + ",ou=Users,dc=csh,dc=rit,dc=edu"
 			self.conn.modify_s(dn, mod_attrs)
 			logging("Info: Successful increment of " + uid  + "'s drink credits from " + str(old_amount) + " to " + str(new_amount))
+			sqlLogger = mySQLLogger.Logger()
+			sqlLogger.enterLog()
 			return new_amount
 		except ldap.INSUFFICIENT_ACCESS, e:
 			logging("Error: Insufficient access to increments the drink credits for " + str(uid) + " by " + str(amount) ,e)
