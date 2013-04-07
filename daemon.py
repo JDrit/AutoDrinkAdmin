@@ -18,18 +18,17 @@ import connector
 import serial
 import ConfigParser
 
-configFile = "config"
-
 class CommThread(Thread):
 	"""
 	The background thread used to communicate with the arduino and report changes
 		to the GUI front end
 	"""
-	def __init__(self):
-		Thread.__init__(self)
-		self.start()
+	def __init__(self, configFileName):
 		self.once = False
 		self.userId = None
+		self.configFile = configFileName
+		Thread.__init__(self)
+		self.start()
 
 	def newUser(self):
 		"""
@@ -39,7 +38,7 @@ class CommThread(Thread):
 		Parameters:
 			userId: the username of the iButton pressed
 		"""
-		conn = connector.PyLDAP()
+		conn = connector.PyLDAP(self.configFile)
 		data = conn.getUsersInformation(self.userId)
 		if data[1] or self.userId == "jd":
 			admin = True
@@ -105,13 +104,13 @@ class CommThread(Thread):
 		self.currentIButtonId = None
 		self.moneyDoorOpen = False
 		addMoney = 0
-		
 		config = ConfigParser.ConfigParser()
-		config.read(configFile)
+		config.read(self.configFile)
+		moneyLogName = config.get("Logs", "moneyLog")
+			
+		logoutTime = config.getint("Daemon", "timeout")
 		
-		logoutTime = config.readInt("Daemon", "timeout")
-		
-		self.ser = serial.Serial(
+		'''self.ser = serial.Serial(
 			port = config.get("Daemon", "port"),
 			baudrate = 9600,
 			timeout = 0 
@@ -119,11 +118,11 @@ class CommThread(Thread):
 		if self.ser.isOpen():
 			self.ser.close()
 		
-		self.ser.open()
+		self.ser.open()'''
 		timeStamp = datetime.now()
 		
 		while True:
-			data = self.ser.read(999)#raw_input("arduino input: ") # self.ser.read(9999)
+			data = raw_input("::") #self.ser.read(999)#raw_input("arduino input: ") # self.ser.read(9999)
 			if len(data) > 1: # if there is input from the arduino
 				if data.startswith('i:'): # iButton input
 					if not data[2:].upper() == self.currentIButtonId: # if not currently logged in user
@@ -138,12 +137,13 @@ class CommThread(Thread):
 				elif data.startswith('m:'): # money input
 					addMoney += int(data[2:])
 					timeStamp = datetime.now()
-					conn = connector.PyLDAP()
+					conn = connector.PyLDAP(self.configFile)
 					new_amount = conn.incUsersCredits(self.userId, addMoney)
 					conn.close()
 					if new_amount: # good transcation
-						addMoney = 0
 						wx.CallAfter(self.moneyAdded, addMoney, new_amount)
+						moneyAmount = int(open(moneyLogName, "r").read())
+						open(moneyLogName, "w").write(str(moneyAmount + addMoney))
 					else:
 						if not self.userId: # if a user adds money while no one is logged in
 							wx.CallAfter(self.appendLog, "No user logged in, log in to add drink credits to your account")
@@ -154,7 +154,7 @@ class CommThread(Thread):
 					connector.logging("Error: invalid input: " + str(data))
 			
 			# the user has been inactive for too long
-			if (datetime.now() - timeStamp) > timedelta(minutes = logoutTime) and self.userId:
+			if (datetime.now() - timeStamp) > timedelta(seconds = logoutTime) and self.userId:
 				connector.logging("Info: logging " + str(self.userId) + " out due to timeout")
 				if self.moneyDoorOpen:
 					self.moneyDoorOpen = False

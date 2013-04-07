@@ -9,22 +9,94 @@ Author:
 """
 import wx
 from wx.lib.pubsub import Publisher
+import argparse
 import daemon
+import ConfigParser
 
-class GUI(wx.Frame):
+class AdminPopup(wx.PopupWindow):
+	"""
+	The popup dialog used to display the admin settings, such as open and close,
+		amount of money in box, etc.
+	"""
 	
-	def __init__(self):
+	def __init__(self, parent, style, daemon, configFile):
+		self.configFile = configFile
+		self.daemon = daemon
+		wx.PopupWindow.__init__(self, parent, style)
+	        panel = self.panel = wx.Panel(self)
+		title_font = wx.Font(40, wx.FONTFAMILY_ROMAN, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD)
+		reg_font = wx.Font(22, wx.FONTFAMILY_ROMAN, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD)
+	 
+        	width, height = wx.DisplaySize()
+		self.SetSize((width * .9, height * .9))
+		self.Center()
+	        wx.CallAfter(self.Refresh)
+		sizer = wx.BoxSizer(wx.VERTICAL)
+		self.admin_title = wx.StaticText(panel, -1, "Admin Panel", style=wx.ALIGN_CENTER)
+		self.admin_title.SetFont(title_font)
+		sizer.Add(self.admin_title, 1, wx.EXPAND|wx.ALL, 25)
+
+		config = ConfigParser.ConfigParser()
+		config.read(self.configFile)
+		moneyLog = open(config.get("Logs", "moneyLog"), "r")
+		self.money_log = wx.StaticText(panel, -1, "Money in Machine: $" + '{0:.02f}'.format(float(moneyLog.read()) / 100))
+		self.money_log.SetFont(reg_font)
+		sizer.Add(self.money_log, 1, wx.EXPAND|wx.ALL, 25)
+		
+		button_bar = wx.BoxSizer(wx.HORIZONTAL)
+		self.open_but = wx.Button(self.panel, -1, "OPEN BOX")
+		self.open_but.SetFont(title_font)
+		self.open_but.Bind(wx.EVT_BUTTON, self.openButton)
+		button_bar.Add(self.open_but, 1, wx.EXPAND|wx.ALL, 20)
+		self.reset_but = wx.Button(self.panel, -1, "RESET COUNTER")
+		self.reset_but.SetFont(title_font)
+		self.reset_but.Bind(wx.EVT_BUTTON, self.resetButton)
+		button_bar.Add(self.reset_but, 1, wx.EXPAND|wx.ALL, 20)
+		
+		sizer.Add(button_bar, 1, wx.EXPAND|wx.CENTER|wx.ALL, 20)
+
+		self.close_but = wx.Button(self.panel, -1, "EXIT")
+		self.close_but.SetFont(title_font)
+		self.close_but.Bind(wx.EVT_BUTTON, self.closeButton)
+		sizer.Add(self.close_but, 1, wx.EXPAND|wx.ALL, 20)
+		panel.SetSizerAndFit(sizer, wx.EXPAND)
+
+	def openButton(self, event):
+		"""
+		Sends the open command to the daemon which thens writes out to
+			the arduino over serial
+		"""
+		self.daemon.openButton()
+	
+	def resetButton(self, event):
+		"""
+		Used to reset the counter of how much money is in Auto Drink Admin
+		"""
+		config = ConfigParser.ConfigParser()
+		config.read(self.configFile)		
+		open(config.get("Logs", "moneyLog"), "w").write("0")
+		self.money_log.SetLabel("Money in Machine: $0.00")
+		
+	def closeButton(self, event):
+		self.Show(False)	
+	
+class GUI(wx.Frame):
+	"""
+	Main GUI for the UI
+	"""
+	def __init__(self, configFile):
 		wx.Frame.__init__(self, 
 			None, 
 			wx.ID_ANY, 
 			"Auto Drink Admin"
 		)
+		self.configFile = configFile
 		self.panel = wx.Panel(self, wx.ID_ANY)
 		self.ShowFullScreen(True) # sets the gui to full screeen
 		self.sizer = wx.BoxSizer(wx.VERTICAL)
 		title_font = wx.Font(40, wx.FONTFAMILY_ROMAN, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD)
 		reg_font = wx.Font(22, wx.FONTFAMILY_ROMAN, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD)
-		
+	
 		title_bar = wx.BoxSizer(wx.HORIZONTAL)
 		jpg = wx.Image('csh_logo.jpg', wx.BITMAP_TYPE_JPEG).ConvertToBitmap()
 
@@ -36,7 +108,7 @@ class GUI(wx.Frame):
 
 		self.sizer.Add(title_bar, 2, wx.EXPAND|wx.ALL, 5)
 			
-		self.user_text = wx.StaticText(self.panel, -1, "    User: ________",)
+		self.user_text = wx.StaticText(self.panel, -1, "    User: ________")
 		self.user_text.SetFont(reg_font)
 		self.sizer.Add(self.user_text, 0, wx.ALL, 10)
 
@@ -49,10 +121,10 @@ class GUI(wx.Frame):
 		self.logout_but.Bind(wx.EVT_BUTTON, self.logoutButton)
 		self.sizer.Add(self.logout_but, 1, wx.ALL|wx.EXPAND, 10)
 
-		self.open_but = wx.Button(self.panel, -1, "OPEN")
-		self.open_but.SetFont(title_font)
-		self.open_but.Bind(wx.EVT_BUTTON, self.openButton)
-		self.sizer.Add(self.open_but, 1, wx.ALL|wx.EXPAND, 10)
+		self.admin_but = wx.Button(self.panel, -1, "ADMIN")
+		self.admin_but.SetFont(title_font)
+		self.admin_but.Bind(wx.EVT_BUTTON, self.adminButton)
+		self.sizer.Add(self.admin_but, 1, wx.ALL|wx.EXPAND, 10)
 			
 		self.log_text = wx.StaticText(self.panel, -1, "Log:")
 		self.log_text.SetFont(reg_font)
@@ -66,7 +138,7 @@ class GUI(wx.Frame):
 		Publisher().subscribe(self.updateLogout, "updateLogout")
 		Publisher().subscribe(self.newUser, "updateNewUser")
 		Publisher().subscribe(self.moneyAdded, "updateMoneyAdded")
-		self.daemon = daemon.CommThread()
+		self.daemon = daemon.CommThread(configFile)
 
 	def logoutButton(self, event):
 		"""
@@ -75,8 +147,12 @@ class GUI(wx.Frame):
 		"""
 		self.daemon.logoutButton()
 	
-	def openButton(self, event):
-		self.daemon.openButton()
+	def adminButton(self, event):
+		win = AdminPopup(self.GetTopLevelParent(), wx.SIMPLE_BORDER, self.daemon, self.configFile)
+		btn = event.GetEventObject()
+		pos = btn.ClientToScreen( (0,0) )
+	        sz =  btn.GetSize()
+	        win.Show(True)		
 
 	def appendLog(self, message):
 		"""
@@ -97,7 +173,7 @@ class GUI(wx.Frame):
 		tup = t.data
 		self.user_text.SetLabel("    User: " + tup[0])
 		self.credits_text.SetLabel("Credits: " + str(tup[1]))
-		self.open_but.Show(tup[2])
+		self.admin_but.Show(tup[2])
 		self.log_text.SetLabel("Log:\n- " + tup[0] + " has successfully been logged in")
 	
 	def moneyAdded(self, t):
@@ -121,11 +197,14 @@ class GUI(wx.Frame):
 		self.credits_text.SetLabel("Credits: ________")
 		self.user_text.SetLabel("    User: ________")
 		self.log_text.SetLabel("Log:")
-		self.open_but.Hide()
+		self.admin_but.Hide()
 
 
 if __name__ == "__main__":
+	parser = argparse.ArgumentParser(description = 'Start the Auto Drink Admin program')
+	parser.add_argument('--config', type=str, help='The config file to use', default='config')
+	args = parser.parse_args()
 	app = wx.PySimpleApp()
-	frame = GUI().Show()
+	frame = GUI(args.config).Show()
 	app.MainLoop()
 

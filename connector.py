@@ -18,7 +18,7 @@ import ldap
 import socket
 import MySQLdb
 
-configFile = "config"
+configFile = None
 
 def logging(errorMessage, e=None):
 	"""
@@ -44,10 +44,11 @@ class PyLDAP():
 		credits
 	"""
 	
-	def __init__(self):
+	def __init__(self, configFileName):
 		"""
 		Sets up a connection to the LDAP server
 		"""
+		configFile = configFileName
 		config = ConfigParser.ConfigParser()
 		config.read(configFile)
 		self.host = config.get("LDAP", "host")
@@ -199,6 +200,7 @@ def getUserId(iButtonId):
 	Returns:
 		The uid of the user if they exist, else it returns None
 	"""
+	# the configs used to connect to Russ's script
 	TCP_ADDRESS = "totoro.csh.rit.edu"
 	TCP_PORT = 56123
 	BUFFER_SIZE = 1024

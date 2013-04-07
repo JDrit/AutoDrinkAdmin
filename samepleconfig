@@ -1,0 +1,25 @@
+[Daemon]
+# the port to use to communicate with the arduino
+port:
+# the amount of seconds, untill the program logs out the current user
+timeout:
+
+[LDAP]
+# host must begin with protocol, ldap:// or ldaps://
+host:
+base_dn:
+username:
+password: 
+cert:
+
+[SQL]
+host:
+username: 
+password: 
+database:
+table:
+# the name that will appear as the admin who entered the money
+adminName:
+
+[Logs]
+moneyLog:
