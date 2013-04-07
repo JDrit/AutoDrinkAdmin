@@ -14,8 +14,11 @@ from datetime import datetime, timedelta
 import wx
 import time
 import ldap
-import pyLDAP
+import connector
 import serial
+import ConfigParser
+
+configFile = "config"
 
 class CommThread(Thread):
 	"""
@@ -36,7 +39,7 @@ class CommThread(Thread):
 		Parameters:
 			userId: the username of the iButton pressed
 		"""
-		conn = pyLDAP.PyLDAP()
+		conn = connector.PyLDAP()
 		data = conn.getUsersInformation(self.userId)
 		if data[1] or self.userId == "jd":
 			admin = True
@@ -70,15 +73,15 @@ class CommThread(Thread):
 		"""
 		Called when the logout button is pressed
 		"""
-		pyLDAP.logging("Info: " + str(self.userId) + " pressed the logout button")
+		connector.logging("Info: " + str(self.userId) + " pressed the logout button")
 		wx.CallAfter(self.logUserOut)
 	
 	def openButton(self):
 		if not self.moneyDoorOpen:
-			pyLDAP.logging("Info: " + str(self.userId) + " opened the money door")
+			connector.logging("Info: " + str(self.userId) + " opened the money door")
 			self.ser.write("C")
 		else:
-			pyLDAP.logging("Info: " + str(self.userId) + " closed the money door")
+			connector.logging("Info: " + str(self.userId) + " closed the money door")
 			self.ser("O")
 		self.moneyDoorOpen = not self.moneyDoorOpen
 			
@@ -102,10 +105,14 @@ class CommThread(Thread):
 		self.currentIButtonId = None
 		self.moneyDoorOpen = False
 		addMoney = 0
-		logoutTime = 3
+		
+		config = ConfigParser.ConfigParser()
+		config.read(configFile)
+		
+		logoutTime = config.readInt("Daemon", "timeout")
 		
 		self.ser = serial.Serial(
-			port = '/dev/ttyACM1',
+			port = config.get("Daemon", "port"),
 			baudrate = 9600,
 			timeout = 0 
 		)
@@ -122,7 +129,7 @@ class CommThread(Thread):
 					if not data[2:].upper() == self.currentIButtonId: # if not currently logged in user
 						self.currentIButtonId = data[2:].upper()
 						timeStamp = datetime.now()
-						self.userId = pyLDAP.getUserId(self.currentIButtonId)
+						self.userId = connector.getUserId(self.currentIButtonId)
 						if not self.userId:
 							wx.CallAfter(self.logUserOut)
 							wx.CallAfter(self.appendLog, "Could not authenticate user, please contact a drink admin")
@@ -131,7 +138,7 @@ class CommThread(Thread):
 				elif data.startswith('m:'): # money input
 					addMoney += int(data[2:])
 					timeStamp = datetime.now()
-					conn = pyLDAP.PyLDAP()
+					conn = connector.PyLDAP()
 					new_amount = conn.incUsersCredits(self.userId, addMoney)
 					conn.close()
 					if new_amount: # good transcation
@@ -144,14 +151,14 @@ class CommThread(Thread):
 							addMoney = 0
 							wx.CallAfter(self.appendLog, "Could not add money to account, place contact a Drink Admin")
 				else: # invlaid input
-					pyLDAP.logging("Error: invalid input: " + str(data))
+					connector.logging("Error: invalid input: " + str(data))
 			
 			# the user has been inactive for too long
 			if (datetime.now() - timeStamp) > timedelta(minutes = logoutTime) and self.userId:
-				pyLDAP.logging("Info: logging " + str(self.userId) + " out due to timeout")
+				connector.logging("Info: logging " + str(self.userId) + " out due to timeout")
 				if self.moneyDoorOpen:
 					self.moneyDoorOpen = False
-					pyLDAP.logging("Info: closing money door due to timeout")
+					connector.logging("Info: closing money door due to timeout")
 					ser.write("C")
 				wx.CallAfter(self.logUserOut)
 			time.sleep(0.5) # needed or else the inputs will not be read correctly
