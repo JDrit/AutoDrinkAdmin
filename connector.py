@@ -16,7 +16,9 @@ import wx
 import time
 import ldap
 import socket
-import mySQLLogger
+import MySQLdb
+
+configFile = "config"
 
 def logging(errorMessage, e=None):
 	"""
@@ -47,7 +49,7 @@ class PyLDAP():
 		Sets up a connection to the LDAP server
 		"""
 		config = ConfigParser.ConfigParser()
-		config.read("config")
+		config.read(configFile)
 		self.host = config.get("LDAP", "host")
 		self.base_dn = config.get("LDAP", "base_dn")
 		self.bind_dn = "uid=" + config.get("LDAP", "username") + "," + self.base_dn
@@ -150,11 +152,9 @@ class PyLDAP():
 			old_amount = int(data[0])
 			new_amount = old_amount + amount
 			mod_attrs = [(ldap.MOD_REPLACE, self.creditsField, str(new_amount))]
-			dn = "uid=" + str(uid) + ",ou=Users,dc=csh,dc=rit,dc=edu"
-			self.conn.modify_s(dn, mod_attrs)
+			self.conn.modify_s(self.bind_dn, mod_attrs)
 			logging("Info: Successful increment of " + uid  + "'s drink credits from " + str(old_amount) + " to " + str(new_amount))
-			sqlLogger = mySQLLogger.Logger()
-			sqlLogger.enterLog()
+			enterSQLLog(uid, amount)
 			return new_amount
 		except ldap.INSUFFICIENT_ACCESS, e:
 			logging("Error: Insufficient access to increments the drink credits for " + str(uid) + " by " + str(amount) ,e)
@@ -175,8 +175,7 @@ class PyLDAP():
 		"""
 		try:
 			mod_attrs = [(ldap.MOD_REPLACE, self.creditsField, str(amount))]
-			dn = "uid=" + str(uid) + ",ou=Users,dc=csh,dc=rit,dc=edu"
-			self.conn.modify_s(dn, mod_attrs)
+			self.conn.modify_s(self.bind_dn, mod_attrs)
 			logging("Info: Successful set of " + str(uid) + "'s drink credits to " + str(amount))
 			return amount
 		except ldap.INSUFFICIENT_ACCESS, e:
@@ -214,3 +213,22 @@ def getUserId(iButtonId):
 		logging("Error: could not instantiate a socket to " + TCP_ADDRESS + " and send and recieve user data", e)
 	finally:
 		s.close()
+
+def enterSQLLog(user, amount):
+	"""
+	Enters the log into the log database table for the drink data
+	Parameters:
+		user: the username of the person who entered money
+		amount: the amount added to the account
+	"""
+	try:
+		config = ConfigParser.ConfigParser()
+		config.read(configFile)
+		conn = MySQLdb.connect(config.get("SQL", "host"), config.get("SQL", "username"), config.get("SQL", "password"), config.get("SQL", "database"))
+		cur = con.cursor()
+		conn.execute("INSERT INTO " + config.get("SQL", "table") + " (username, admin, amount, direction, reason) VALUES (%s, %s, %s, %s, %s)", user, config.get("SQL", "adminName"), str(amount), "in", "add_money")
+		conn.commit()
+		cursor.close()
+		conn.close()
+	except MySQLdb.Error, e:
+		logging("Error: could not log to database", e)
