@@ -29,7 +29,6 @@ class AdminPopup(wx.PopupWindow):
 	 
         	width, height = wx.DisplaySize()
 		self.SetSize((width * .9, height * .9))
-		self.Center()
 	        wx.CallAfter(self.Refresh)
 		sizer = wx.BoxSizer(wx.VERTICAL)
 		self.admin_title = wx.StaticText(panel, -1, "Admin Panel", style=wx.ALIGN_CENTER)
@@ -38,28 +37,31 @@ class AdminPopup(wx.PopupWindow):
 
 		config = ConfigParser.ConfigParser()
 		config.read(self.configFile)
-		moneyLog = open(config.get("Logs", "moneyLog"), "r")
-		self.money_log = wx.StaticText(panel, -1, "Money in Machine: $" + '{0:.02f}'.format(float(moneyLog.read()) / 100))
+		try: # gets the amount of money in the box from the file
+			f = open(config.get("Logs", "moneyLog"), "r+")
+			self.money_log = wx.StaticText(panel, -1, "Money in Machine: $" + '{0:.02f}'.format(float(f.read()) / 100))
+		except Exception, e:
+			self.money_log = wx.StaticText(panel, -1, "Money in Machinr: $0.00")
+			f = open(config.get("Logs", "moneyLog"), "w")
+			f.write("0")
+		finally:
+			f.close()
 		self.money_log.SetFont(reg_font)
 		sizer.Add(self.money_log, 1, wx.EXPAND|wx.ALL, 25)
 		
-		button_bar = wx.BoxSizer(wx.HORIZONTAL)
-		self.open_but = wx.Button(self.panel, -1, "OPEN BOX")
-		self.open_but.SetFont(title_font)
-		self.open_but.Bind(wx.EVT_BUTTON, self.openButton)
-		button_bar.Add(self.open_but, 1, wx.EXPAND|wx.ALL, 20)
 		self.reset_but = wx.Button(self.panel, -1, "RESET COUNTER")
 		self.reset_but.SetFont(title_font)
 		self.reset_but.Bind(wx.EVT_BUTTON, self.resetButton)
-		button_bar.Add(self.reset_but, 1, wx.EXPAND|wx.ALL, 20)
-		
-		sizer.Add(button_bar, 1, wx.EXPAND|wx.CENTER|wx.ALL, 20)
+		sizer.Add(self.reset_but, 1, wx.EXPAND|wx.CENTER|wx.ALL, 20)
 
 		self.close_but = wx.Button(self.panel, -1, "EXIT")
 		self.close_but.SetFont(title_font)
 		self.close_but.Bind(wx.EVT_BUTTON, self.closeButton)
 		sizer.Add(self.close_but, 1, wx.EXPAND|wx.ALL, 20)
+		
 		panel.SetSizerAndFit(sizer, wx.EXPAND)
+		self.SetBestFittingSize()
+		self.Center()
 
 	def openButton(self, event):
 		"""

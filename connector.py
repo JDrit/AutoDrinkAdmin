@@ -18,8 +18,6 @@ import ldap
 import socket
 import MySQLdb
 
-configFile = None
-
 def logging(errorMessage, e=None):
 	"""
 	Logs all messages to include both error messages and normal info messages.
@@ -48,14 +46,14 @@ class PyLDAP():
 		"""
 		Sets up a connection to the LDAP server
 		"""
-		configFile = configFileName
+		self.configFile = configFileName
 		config = ConfigParser.ConfigParser()
-		config.read(configFile)
+		config.read(self.configFile)
 		self.host = config.get("LDAP", "host")
-		self.base_dn = config.get("LDAP", "base_dn")
-		self.bind_dn = "uid=" + config.get("LDAP", "username") + "," + self.base_dn
+		self.bind_dn = config.get("LDAP", "bind_dn")
+		self.user_dn = config.get("LDAP", "user_dn")
 		self.password = config.get("LDAP", "password")
-		self.creditsField = 'roomNumber' # the field that stores users' drink credits
+		self.creditsField = 'drinkBalance' # the field that stores users' drink credits
 
 		try:
 			if not config.get("LDAP", "cert") == "": # if there is a cert to use
@@ -80,7 +78,7 @@ class PyLDAP():
 		result_set = []
 
 		try:
-			ldap_result_id = self.conn.search(self.base_dn, search_scope, search_filter, None)
+			ldap_result_id = self.conn.search(self.user_dn, search_scope, search_filter, None)
 			while True:
 				result_type, result_data = self.conn.result(ldap_result_id, 0)
 				if result_data == []:
@@ -118,11 +116,7 @@ class PyLDAP():
 				logging("Error: no LDAP data for " + str(uid))
 				return
 			amount = int(data[self.creditsField][0])
-			drinkAdmin = int(data['drinkAdmin'][0])
-			if drinkAdmin == 1:
-				drinkAdmin = True
-			else:
-				drinkAdmin = False
+			drinkAdmin = (int(data['drinkAdmin'][0]) == 1)
 			logging("Info: Successful fetch of " + str(uid) + "'s drink credits: " + str(amount) + " and drink admin status")
 			return amount, drinkAdmin
 		except ldap.LDAPError, e:
@@ -153,9 +147,9 @@ class PyLDAP():
 			old_amount = int(data[0])
 			new_amount = old_amount + amount
 			mod_attrs = [(ldap.MOD_REPLACE, self.creditsField, str(new_amount))]
-			self.conn.modify_s(self.bind_dn, mod_attrs)
+			self.conn.modify_s("uid=" + uid + "," + self.user_dn, mod_attrs)
+			enterSQLLog(uid, amount, self.configFile)
 			logging("Info: Successful increment of " + uid  + "'s drink credits from " + str(old_amount) + " to " + str(new_amount))
-			enterSQLLog(uid, amount)
 			return new_amount
 		except ldap.INSUFFICIENT_ACCESS, e:
 			logging("Error: Insufficient access to increments the drink credits for " + str(uid) + " by " + str(amount) ,e)
@@ -176,7 +170,7 @@ class PyLDAP():
 		"""
 		try:
 			mod_attrs = [(ldap.MOD_REPLACE, self.creditsField, str(amount))]
-			self.conn.modify_s(self.bind_dn, mod_attrs)
+			self.conn.modify_s("uid=" + uid + "," + self.user_dn, mod_attrs)
 			logging("Info: Successful set of " + str(uid) + "'s drink credits to " + str(amount))
 			return amount
 		except ldap.INSUFFICIENT_ACCESS, e:
@@ -216,21 +210,28 @@ def getUserId(iButtonId):
 	finally:
 		s.close()
 
-def enterSQLLog(user, amount):
+def enterSQLLog(user, amount, configFile):
 	"""
 	Enters the log into the log database table for the drink data
 	Parameters:
 		user: the username of the person who entered money
 		amount: the amount added to the account
 	"""
+	print user, amount, configFile
 	try:
 		config = ConfigParser.ConfigParser()
 		config.read(configFile)
 		conn = MySQLdb.connect(config.get("SQL", "host"), config.get("SQL", "username"), config.get("SQL", "password"), config.get("SQL", "database"))
-		cur = con.cursor()
-		conn.execute("INSERT INTO " + config.get("SQL", "table") + " (username, admin, amount, direction, reason) VALUES (%s, %s, %s, %s, %s)", user, config.get("SQL", "adminName"), str(amount), "in", "add_money")
+		cur = conn.cursor()
+		sql = "INSERT INTO " + config.get("SQL", "table") + \
+			"(username, admin, amount, direction, reason) \
+			VALUES ('%s', '%s', '%d', '%s', '%s')" % \
+			(user, config.get("SQL", "adminName"), amount, 'in', 'add_money')
+		cur.execute(sql)
 		conn.commit()
-		cursor.close()
+		cur.close()
 		conn.close()
 	except MySQLdb.Error, e:
 		logging("Error: could not log to database", e)
+	except Exception, e:
+		logging("Error: could not write to database", e)

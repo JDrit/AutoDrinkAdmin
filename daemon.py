@@ -110,7 +110,7 @@ class CommThread(Thread):
 			
 		logoutTime = config.getint("Daemon", "timeout")
 		
-		'''self.ser = serial.Serial(
+		self.ser = serial.Serial(
 			port = config.get("Daemon", "port"),
 			baudrate = 9600,
 			timeout = 0 
@@ -118,12 +118,13 @@ class CommThread(Thread):
 		if self.ser.isOpen():
 			self.ser.close()
 		
-		self.ser.open()'''
+		self.ser.open()
 		timeStamp = datetime.now()
 		
 		while True:
-			data = raw_input("::") #self.ser.read(999)#raw_input("arduino input: ") # self.ser.read(9999)
+			data = self.ser.read(999) #raw_input("arduino input: ")
 			if len(data) > 1: # if there is input from the arduino
+				print data
 				if data.startswith('i:'): # iButton input
 					if not data[2:].upper() == self.currentIButtonId: # if not currently logged in user
 						self.currentIButtonId = data[2:].upper()
@@ -135,15 +136,22 @@ class CommThread(Thread):
 						else:
 							wx.CallAfter(self.newUser)
 				elif data.startswith('m:'): # money input
-					addMoney += int(data[2:])
+					addMoney = int(data[2:])
 					timeStamp = datetime.now()
 					conn = connector.PyLDAP(self.configFile)
 					new_amount = conn.incUsersCredits(self.userId, addMoney)
 					conn.close()
 					if new_amount: # good transcation
 						wx.CallAfter(self.moneyAdded, addMoney, new_amount)
-						moneyAmount = int(open(moneyLogName, "r").read())
-						open(moneyLogName, "w").write(str(moneyAmount + addMoney))
+						try:
+							f = open(moneyLogName, "r")
+							moneyAmount = int(f.read())
+							f.write(str(moneyAmount + addMoney))
+						except Exception, e:
+							f = open(moneyLogName, "w")
+							f.write(str(addMoney))
+						finally:
+							f.close()
 					else:
 						if not self.userId: # if a user adds money while no one is logged in
 							wx.CallAfter(self.appendLog, "No user logged in, log in to add drink credits to your account")
