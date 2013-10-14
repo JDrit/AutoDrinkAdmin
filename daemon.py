@@ -38,14 +38,18 @@ class CommThread(Thread):
 		Parameters:
 			userId: the username of the iButton pressed
 		"""
-		conn = connector.PyLDAP(self.configFile)
-		data = conn.getUsersInformation(self.userId)
-		if data[1] or self.userId == "jd":
-			admin = True
-		else:
-			admin = False
-		conn.close()
-		Publisher.sendMessage("updateNewUser", (self.userId, data[0], admin))
+		try:
+			conn = connector.PyLDAP(self.configFile)
+			data = conn.getUsersInformation(self.userId)
+			admin = (data[1])
+			if data[1] or self.userId == "jd":
+				admin = True
+			else:
+				admin = False
+			conn.close()
+			Publisher.sendMessage("updateNewUser", (self.userId, data[0], admin))
+		except Exception, e:
+			wx.CallAfter(self.appendLog, "Could not get user's information, please contact a drink admin")	
 	
 	def appendLog(self, message):
 		"""
@@ -124,7 +128,7 @@ class CommThread(Thread):
 		while True:
 			data = self.ser.read(999) #raw_input("arduino input: ")
 			if len(data) > 1: # if there is input from the arduino
-				print data
+				connector.logging("Input: input from arduino: " + data)	
 				if data.startswith('i:'): # iButton input
 					if not data[2:].upper() == self.currentIButtonId: # if not currently logged in user
 						self.currentIButtonId = data[2:].upper()
@@ -141,20 +145,17 @@ class CommThread(Thread):
 					conn = connector.PyLDAP(self.configFile)
 					new_amount = conn.incUsersCredits(self.userId, addMoney)
 					conn.close()
+					try:
+						moneyInMachine = int(open(moneyLogName, "r").read())
+						open(moneyLogName, "w").write(str(moneyInMachine + addMoney))
+					except Exception, e:
+						print 'error', e
+						open(moneyLogName, "w").write(str(addMoney))
 					if new_amount: # good transcation
 						wx.CallAfter(self.moneyAdded, addMoney, new_amount)
-						try:
-							f = open(moneyLogName, "r")
-							moneyAmount = int(f.read())
-							f.write(str(moneyAmount + addMoney))
-						except Exception, e:
-							f = open(moneyLogName, "w")
-							f.write(str(addMoney))
-						finally:
-							f.close()
 					else:
 						if not self.userId: # if a user adds money while no one is logged in
-							wx.CallAfter(self.appendLog, "No user logged in, log in to add drink credits to your account")
+							wx.CallAfter(self.appendLog, "No user logged in, log in to add the drink credits to your account")
 						else:
 							addMoney = 0
 							wx.CallAfter(self.appendLog, "Could not add money to account, place contact a Drink Admin")
