@@ -1,0 +1,11 @@
+
+module mypol 1.0;
+
+require {
+	type ldconfig_t;
+	type var_lib_t;
+	class file read;
+}
+
+#============= ldconfig_t ==============
+allow ldconfig_t var_lib_t:file read;
