@@ -21,7 +21,10 @@ import ConfigParser
 class CommThread(Thread):
 
     def heart_beat(self):
-
+        """
+        This function is used for the thread that talks to the arduino to tell
+        the arduino when it should inhibit or not
+        """
         while True:
             self.ser.write("h")
             time.sleep(1000)
@@ -125,6 +128,7 @@ class CommThread(Thread):
         self.ser.open()
         timeStamp = datetime.now()
 
+        # starts the heart beat for the arduino
         heart_beat_thread = Thread(target=heart_beat)
         heart_beat_thread.start()
 
