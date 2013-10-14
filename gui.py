@@ -133,7 +133,6 @@ class GUI(wx.Frame):
 		self.sizer.Add(self.log_text, 10, wx.TOP|wx.LEFT, 20)
 
 		self.panel.SetSizerAndFit(self.sizer)
-		
 
 		# sets up the listeners to listen for the messages from the background thread
 		Publisher().subscribe(self.appendLog, "appendLog")
