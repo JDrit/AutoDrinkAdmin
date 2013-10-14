@@ -6,7 +6,10 @@ OneWire ds(4); // One Wire for iButton on pin 4
 unsigned long int time;             // the current time unit
 unsigned long timeOfLastPulseCoins; // the time of the last pulse from the coin reader
 unsigned long timeOfLastPulseBills; // the time of the last pulse from the bill reader
+<<<<<<< HEAD
 unsigned long heartBeat;            // the time of the last heart beat from the laptop to make sure the computer is still active
+=======
+>>>>>>> a105287c809ab453c80edc32efbbbd5880d22b9a
 volatile int coinsValue;            // the amount of money from the coin reader
 volatile int billsValue;            // the amount of money from the bill reader
 volatile int coinsChange;           // 1 if the coin reader has had input, 0 otherwise
@@ -48,6 +51,7 @@ void billInserted() {
   timeOfLastPulseBills = millis();
 }
 
+<<<<<<< HEAD
 /*
  * Sends the command to the readers to stop accepting money
  */
@@ -62,6 +66,8 @@ void startReaders() {
   
 }
 
+=======
+>>>>>>> a105287c809ab453c80edc32efbbbd5880d22b9a
 void loop()
 {
   String input = "";
