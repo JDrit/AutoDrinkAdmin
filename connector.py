@@ -1,8 +1,8 @@
 """
 Description:
-	The background process to communicate with the arduino, CSH LDAP, 
-	and the	front end GUI. This includes the LDAP classes and the Thread 
-	that is run from the front end to deal with all the communication. 
+	The background process to communicate with the arduino, CSH LDAP,
+	and the	front end GUI. This includes the LDAP classes and the Thread
+	that is run from the front end to deal with all the communication.
 	The thread takes input from the arduino to update LDAP and the GUI.
 Author:
 	JD <jd@csh.rit.edu>
@@ -41,7 +41,7 @@ class PyLDAP():
 	The class that connects to the CSH LDAP server to search / modify user's drink
 		credits
 	"""
-	
+
 	def __init__(self, configFileName):
 		"""
 		Sets up a connection to the LDAP server
@@ -64,7 +64,7 @@ class PyLDAP():
 			self.conn.simple_bind_s(self.bind_dn, self.password)
 		except ldap.LDAPError, e:
 			logging("Error: could not bind to the host: " + self.host + " with bind: " + self.bind_dn, e)
-	
+
 	def search(self, uid):
 		"""
 		Searches through LDAP to get the data for the given user id
@@ -96,7 +96,7 @@ class PyLDAP():
 			logging("Error: LDAP error while searching for " + str(uid), e)
 		except Exception, e:
 			logging("Error: unkown error while searching for " + str(uid), e)
-		
+
 
 	def getUsersInformation(self, uid):
 		"""
@@ -124,11 +124,11 @@ class PyLDAP():
 			logging("Error: LDAP error while trying to get " + str(uid) + "'s information", e)
 		except Exception, e:
 			logging("Error: could not get drink credits for uid: " + str(uid), e)
-	
+
 	def incUsersCredits(self, uid, amount):
 		"""
 		Increments the user's drink credits by the given amount. The users drink
-			credits are refetched everytime so that if their balance increases 
+			credits are refetched everytime so that if their balance increases
 			are decreases between the fetch and the increment, it does not
 			cause any problems. This could be exploited by fetching the user's
 			drink credits, buying a drink and then adding to their balance. This
@@ -166,7 +166,7 @@ class PyLDAP():
 			uid: the user ID for the person to have their drink balance changed
 			amount: the amount of drink credits to set the person's balance to
 		Returns:
-			the new amount of drink credits for the user if the LDAP change was successful, 
+			the new amount of drink credits for the user if the LDAP change was successful,
 				None if the change failed
 		"""
 		try:
@@ -181,7 +181,7 @@ class PyLDAP():
 		except ldap.LDAPError, e:
 			logging("Error: LDAP error while trying to set " + str(uid) + "'s drink credits to " + str(amount), e)
 		except Exception, e:
-			Logging("Error: could not set " + str(uid) + "'s drink credits to " + str(amount), e) 			
+			Logging("Error: could not set " + str(uid) + "'s drink credits to " + str(amount), e)
 
 	def close(self):
 		self.conn.unbind()
@@ -222,7 +222,10 @@ def enterSQLLog(user, amount, configFile):
 	try:
 		config = ConfigParser.ConfigParser()
 		config.read(configFile)
-		conn = MySQLdb.connect(config.get("SQL", "host"), config.get("SQL", "username"), config.get("SQL", "password"), config.get("SQL", "database"))
+		conn = MySQLdb.connect(config.get("SQL", "host"),
+                config.get("SQL", "username"),
+                config.get("SQL", "password"),
+                config.get("SQL", "database"))
 		cur = conn.cursor()
 		sql = "INSERT INTO " + config.get("SQL", "table") + \
 			"(username, admin, amount, direction, reason) \
