@@ -91,7 +91,7 @@ void loop()
   }
 
   if (millis() - heartBeat > 1000) {
-//    inhibitReaders();
+    inhibitReaders();
   }
   // clears & initialzes the iButton buffer
   for (int i = 0 ; i < IBUTTON_ID_SIZE ; i++) {
@@ -114,12 +114,12 @@ void loop()
   
   if (coinsChange == 1 && millis() - timeOfLastPulseCoins > 200) {
     coinsChange = 0;
-    Serial.print("c:" + String(coinsValue));
+    Serial.print("m:" + String(coinsValue));
     coinsValue = 0;
   }
   if (billsChange == 1 && millis() - timeOfLastPulseBills > 500) {
     billsChange = 0;
-    Serial.print("d:" + String(billsValue * 100));
+    Serial.print("m:" + String(billsValue * 100));
     billsValue = 0;
   }
   
