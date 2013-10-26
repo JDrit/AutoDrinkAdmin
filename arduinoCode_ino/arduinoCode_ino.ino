@@ -28,7 +28,8 @@ void setup()
   pinMode(7,OUTPUT); // the pin used for the inhibiter
   delay(500);
   digitalWrite(9, LOW);
-  attachInterrupt(0, coinInserted, CHANGE);
+//  attachInterrupt(0, coinInserted, CHANGE);
+  attachInterrupt(0, coinInserted, FALLING);
   attachInterrupt(1, billInserted, FALLING);
   digitalWrite(3, HIGH); // bill reader
 }
@@ -38,15 +39,15 @@ void setup()
  * than 150 milliseconds
  */
 void coinInserted() {
-  if (digitalRead( coinReader ) == HIGH) {
-    highTime = millis(); //get time of pulse going HIGH
-   } else { 
-    if (millis() - highTime < 150) { // if the pulse width was less than 150, so no start up pulses
+//  if (digitalRead( coinReader ) == HIGH) {
+ //   highTime = millis(); //get time of pulse going HIGH
+ //  } else { 
+ //   if (millis() - highTime < 150) { // if the pulse width was less than 150, so no start up pulses
       coinsValue++;
       coinsChange = 1;
       timeOfLastPulseCoins = millis();
-    }
-  }
+  //  }
+  //}
 }
 
 /*
@@ -84,13 +85,10 @@ void loop()
       startReaders();
     } else if (input == 'h') { // laptop sent heart beat
        heartBeat = millis();
-       startReaders();
-    } else {
-      inhibitReaders();
     }
   }
 
-  if (millis() - heartBeat > 1000) {
+  if (millis() - heartBeat > 5000) {
     inhibitReaders();
   }
   // clears & initialzes the iButton buffer

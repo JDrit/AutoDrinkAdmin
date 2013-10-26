@@ -16,7 +16,6 @@ import wx
 import time
 import ldap
 import socket
-import MySQLdb
 
 def logging(errorMessage, e=None):
 	"""
@@ -56,7 +55,7 @@ class PyLDAP():
 		self.creditsField = 'drinkBalance' # the field that stores users' drink credits
 
 		try:
-			ldap.set_option(ldap.OPT_X_TLS_REQUIRE_CERT, ldap.OPT_X_TLS_DEMAND)
+			ldap.set_option(ldap.OPT_X_TLS_REQUIRE_CERT, ldap.OPT_X_TLS_NEVER)
 			self.conn = ldap.initialize(self.host)
 			self.conn.simple_bind_s(self.bind_dn, self.password)
 		except ldap.LDAPError, e:
@@ -226,13 +225,11 @@ def enterSQLLog(user, amount, configFile):
 		cur = conn.cursor()
 		sql = "INSERT INTO " + config.get("SQL", "table") + \
 			"(username, admin, amount, direction, reason) \
-			VALUES ('%s', '%s', '%d', '%s', '%s')" % \
-			(user, config.get("SQL", "adminName"), amount, 'in', 'add_money')
-		cur.execute(sql)
+			VALUES ('%s', '%s', '%d', '%s', '%s')"
+		cur.execute(sql, (user, config.get("SQL", "adminName"), amount, 'in', 'add_money'))
 		conn.commit()
 		cur.close()
 		conn.close()
-	except MySQLdb.Error, e:
-		logging("Error: could not log to database", e)
+
 	except Exception, e:
 		logging("Error: could not write to database", e)

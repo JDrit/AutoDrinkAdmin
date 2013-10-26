@@ -1,6 +1,0 @@
-2013-04-18 09:17:46: Error: could not bind to the host: ldaps://ldap.csh.rit.edu with bind: uid=jd, ou=Users,dc=csh,dc=rit,dc=edu
-	{'info': 'TLS error -5938:Encountered end of file', 'desc': "Can't contact LDAP server"}
-2013-04-18 09:20:13: Error: could not bind to the host: ldaps://ldap.csh.rit.edu with bind: uid=jd, ou=Users,dc=csh,dc=rit,dc=edu
-	{'info': 'TLS error -5938:Encountered end of file', 'desc': "Can't contact LDAP server"}
-2013-04-18 09:27:26: Error: could not bind to the host: ldaps://ldap.csh.rit.edu with bind: uid=jd, ou=Users,dc=csh,dc=rit,dc=edu
-	{'info': 'TLS error -5938:Encountered end of file', 'desc': "Can't contact LDAP server"}

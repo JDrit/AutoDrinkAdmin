@@ -21,11 +21,13 @@ import ConfigParser
 def heart_beat(self):
     """
     This function is used for the thread that talks to the arduino to tell
-    the arduino when it should inhibit or not
+    the arduino when it should inhibit or not. This is done so that if power is
+    cut and everything is rebooted, the readers will not start taking money intil
+    the computer is ready to process the money.
     """
     while True:
         self.ser.write("h")
-        time.sleep(1000)
+        time.sleep(1)
 
 
 class CommThread(Thread):
@@ -132,7 +134,7 @@ class CommThread(Thread):
         heart_beat_thread.start()
 
         while True:
-            data = self.ser.read(999) #raw_input("arduino input: ")
+            data = self.ser.read(999)
             if len(data) > 1: # if there is input from the arduino
                 connector.logging("Input: input from arduino: " + data)
                 if data.startswith('i:'): # iButton input
@@ -166,7 +168,7 @@ class CommThread(Thread):
                         else:
                             addMoney = 0
                             wx.CallAfter(self.appendLog, "Could not add money to account, place contact a Drink Admin")
-                else: # invlaid input
+                else: # invalid input
                     connector.logging("Error: invalid input: " + str(data))
 
             # the user has been inactive for too long
