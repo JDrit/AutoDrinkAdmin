@@ -136,11 +136,11 @@ class CommThread(Thread):
         while True:
             data = self.ser.read(999)
             if len(data) > 1: # if there is input from the arduino
+                timeStamp = datetime.now()
                 connector.logging("Input: input from arduino: " + data)
                 if data.startswith('i:'): # iButton input
                     if not data[2:].upper() == self.currentIButtonId: # if not currently logged in user
                         self.currentIButtonId = data[2:].upper()
-                        timeStamp = datetime.now()
                         self.userId = connector.getUserId(self.currentIButtonId)
                         if not self.userId:
                             wx.CallAfter(self.logUserOut)
@@ -149,8 +149,7 @@ class CommThread(Thread):
                             wx.CallAfter(self.newUser)
                             self.ser.write("a")
                 elif data.startswith('m:'): # money input
-                    addMoney = int(data[2:])
-                    timeStamp = datetime.now()
+                    addMoney += int(data[2:])
                     conn = connector.PyLDAP(self.configFile)
                     new_amount = conn.incUsersCredits(self.userId, addMoney)
                     conn.close()
@@ -158,10 +157,10 @@ class CommThread(Thread):
                         moneyInMachine = int(open(moneyLogName, "r").read())
                         open(moneyLogName, "w").write(str(moneyInMachine + addMoney))
                     except Exception, e:
-                        print 'error', e
                         open(moneyLogName, "w").write(str(addMoney))
                     if new_amount: # good transcation
                         wx.CallAfter(self.moneyAdded, addMoney, new_amount)
+                        addMoney = 0
                     else:
                         if not self.userId: # if a user adds money while no one is logged in
                             wx.CallAfter(self.appendLog, "No user logged in, log in to add the drink credits to your account")
@@ -174,10 +173,6 @@ class CommThread(Thread):
             # the user has been inactive for too long
             if (datetime.now() - timeStamp) > timedelta(seconds = logoutTime) and self.userId:
                 connector.logging("Info: logging " + str(self.userId) + " out due to timeout")
-                if self.moneyDoorOpen:
-                    self.moneyDoorOpen = False
-                    connector.logging("Info: closing money door due to timeout")
-                    ser.write("l")
                 wx.CallAfter(self.logUserOut)
             time.sleep(0.5) # needed or else the inputs will not be read correctly
 
