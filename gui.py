@@ -99,6 +99,7 @@ class GUI(wx.Frame):
         self.sizer = wx.BoxSizer(wx.VERTICAL)
         title_font = wx.Font(40, wx.FONTFAMILY_ROMAN, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD)
         reg_font = wx.Font(22, wx.FONTFAMILY_ROMAN, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD)
+        log_font = wx.Font(18, wx.FONTFAMILY_ROMAN, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD)
 
         title_bar = wx.BoxSizer(wx.HORIZONTAL)
         jpg = wx.Image('csh_logo.jpg', wx.BITMAP_TYPE_JPEG).ConvertToBitmap()
@@ -129,14 +130,23 @@ class GUI(wx.Frame):
         self.admin_but.Bind(wx.EVT_BUTTON, self.adminButton)
         self.sizer.Add(self.admin_but, 1, wx.ALL|wx.EXPAND, 10)
 
+        self.log_sizer = wx.BoxSizer(wx.HORIZONTAL)
         self.log_text = wx.StaticText(self.panel, -1, "Log:")
-        self.log_text.SetFont(reg_font)
-        self.sizer.Add(self.log_text, 10, wx.TOP|wx.LEFT, 20)
+        self.log_text.SetFont(log_font)
+        self.log_sizer.Add(self.log_text, 90, wx.TOP|wx.LEFT, 20)
+
+        self.money_text = wx.StaticText(self.panel, -1, "Money:")
+        self.money_text.SetFont(log_font)
+        self.log_sizer.Add(self.money_text, 10, wx.TOP, 20)
+
+        self.sizer.Add(self.log_sizer, 10, wx.TOP|wx.LEFT, 20)
 
         self.panel.SetSizerAndFit(self.sizer)
+        self.money_text.Layout()
 
         # sets up the listeners to listen for the messages from the background thread
         Publisher().subscribe(self.appendLog, "appendLog")
+        Publisher().subscribe(self.appendMoney, "appendMoney")
         Publisher().subscribe(self.updateLogout, "updateLogout")
         Publisher().subscribe(self.newUser, "updateNewUser")
         Publisher().subscribe(self.moneyAdded, "updateMoneyAdded")
@@ -165,6 +175,9 @@ class GUI(wx.Frame):
         """
         self.log_text.SetLabel("Log:\n- " + message.data + self.log_text.GetLabel()[4:])
 
+    def appendMoney(self, message):
+        self.money_text.SetLabel("Money:\n- " + message.data + self.money_text.GetLabel()[6:])
+
     def newUser(self, t):
         """
         Used when the background thread gets a new user to log in. This is used to
@@ -176,6 +189,7 @@ class GUI(wx.Frame):
         self.user_text.SetLabel("    User: " + tup[0])
         self.credits_text.SetLabel("Credits: " + str(tup[1]))
         self.admin_but.Show(tup[2])
+        self.logout_but.Show()
         self.log_text.SetLabel("Log:\n- " + tup[0] + " has successfully been logged in")
 
     def moneyAdded(self, t):
@@ -188,6 +202,7 @@ class GUI(wx.Frame):
         tup = t.data
         self.credits_text.SetLabel("Credits: " + str(tup[0]))
         self.log_text.SetLabel("Log:\n- " + tup[1] + self.log_text.GetLabel()[4:])
+        self.money_text.SetLabel("Money:")
 
     def updateLogout(self, n=None):
         """
@@ -199,7 +214,9 @@ class GUI(wx.Frame):
         self.credits_text.SetLabel("Credits: ________")
         self.user_text.SetLabel("    User: ________")
         self.log_text.SetLabel("Log:")
+        self.money_text.SetLabel("Money:")
         self.admin_but.Hide()
+        self.logout_but.Hide()
 
 
 if __name__ == "__main__":

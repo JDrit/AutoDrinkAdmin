@@ -28,8 +28,7 @@ void setup()
   pinMode(7,OUTPUT); // the pin used for the inhibiter
   delay(500);
   digitalWrite(9, LOW);
-//  attachInterrupt(0, coinInserted, CHANGE);
-  attachInterrupt(0, coinInserted, FALLING);
+  attachInterrupt(0, coinInserted, CHANGE);
   attachInterrupt(1, billInserted, FALLING);
   digitalWrite(3, HIGH); // bill reader
 }
@@ -39,15 +38,15 @@ void setup()
  * than 150 milliseconds
  */
 void coinInserted() {
-//  if (digitalRead( coinReader ) == HIGH) {
- //   highTime = millis(); //get time of pulse going HIGH
- //  } else { 
- //   if (millis() - highTime < 150) { // if the pulse width was less than 150, so no start up pulses
+  if (digitalRead( coinReader ) == HIGH) {
+    highTime = millis(); //get time of pulse going HIGH
+   } else { 
+     if (millis() - highTime < 150) { // if the pulse width was less than 150, so no start up pulses
       coinsValue++;
       coinsChange = 1;
       timeOfLastPulseCoins = millis();
-  //  }
-  //}
+    }
+  }
 }
 
 /*
@@ -110,12 +109,12 @@ void loop()
     ds.reset_search();
   }
   
-  if (coinsChange == 1 && millis() - timeOfLastPulseCoins > 200) {
+  if (coinsChange == 1) {
     coinsChange = 0;
     Serial.print("m:" + String(coinsValue));
     coinsValue = 0;
   }
-  if (billsChange == 1 && millis() - timeOfLastPulseBills > 500) {
+  if (billsChange == 1) {
     billsChange = 0;
     Serial.print("m:" + String(billsValue * 100));
     billsValue = 0;

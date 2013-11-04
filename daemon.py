@@ -74,6 +74,9 @@ class CommThread(Thread):
         """
         Publisher.sendMessage("appendLog", message)
 
+    def appendMoney(self, message):
+        Publisher.sendMessage("appendMoney", message)
+
     def moneyAdded(self, amount, new_amount):
         """
         Tells the GUI when money is added to the user's account. This has to be run in a
@@ -99,10 +102,13 @@ class CommThread(Thread):
             This has to be in its own method so that it can be run by the main
             GUI thread.
         """
-        self.currentIButtonId = None
-        self.userId = None
-        self.ser.write("l")
-        Publisher.sendMessage("updateLogout")
+        if (datetime.now() - self.last_money > timedelta(seconds = 2)):
+            self.currentIButtonId = None
+            self.logged_in = False
+            self.ser.write("l")
+            Publisher.sendMessage("updateLogout")
+        else:
+            wx.CallAfter(self.appendLog, "Could not log out yet, wait for money transfer to finish")
 
     def run(self):
         """
@@ -110,8 +116,7 @@ class CommThread(Thread):
             update the user's information
         """
         self.currentIButtonId = None
-        self.moneyDoorOpen = False
-        addMoney = 0
+        self.logged_in = False
         config = ConfigParser.ConfigParser()
         config.read(self.configFile)
         moneyLogName = config.get("Logs", "moneyLog")
@@ -127,51 +132,60 @@ class CommThread(Thread):
             self.ser.close()
 
         self.ser.open()
-        timeStamp = datetime.now()
+        timeStamp = datetime.now()       # last time input from the arduino
+        self.last_money = datetime.now() # last time money was entered
+        money_update = datetime.now()    # used to update the money log
+        money_cache = 0                  # the amount of money cached on the machine
 
         # starts the heart beat for the arduino
         heart_beat_thread = Thread(target=heart_beat, args = (self,))
         heart_beat_thread.start()
 
         while True:
-            data = self.ser.read(999)
+            data = self.ser.readline(999)
             if len(data) > 1: # if there is input from the arduino
                 timeStamp = datetime.now()
                 connector.logging("Input: input from arduino: " + data)
                 if data.startswith('i:'): # iButton input
-                    if not data[2:].upper() == self.currentIButtonId: # if not currently logged in user
-                        self.currentIButtonId = data[2:].upper()
+                    if (not data[2:].upper() == self.currentIButtonId and
+                            datetime.now() - self.last_money > timedelta(seconds=2)): # if not currently logged in user
+                        self.currentIButtonId = data[2:-2].upper()
                         self.userId = connector.getUserId(self.currentIButtonId)
                         if not self.userId:
                             wx.CallAfter(self.logUserOut)
                             wx.CallAfter(self.appendLog, "Could not authenticate user, please contact a drink admin")
                         else:
                             wx.CallAfter(self.newUser)
+                            self.logged_in = True
                             self.ser.write("a")
                 elif data.startswith('m:'): # money input
-                    addMoney += int(data[2:])
-                    conn = connector.PyLDAP(self.configFile)
-                    new_amount = conn.incUsersCredits(self.userId, addMoney)
-                    conn.close()
-                    try:
-                        moneyInMachine = int(open(moneyLogName, "r").read())
-                        open(moneyLogName, "w").write(str(moneyInMachine + addMoney))
-                    except Exception, e:
-                        open(moneyLogName, "w").write(str(addMoney))
-                    if new_amount: # good transcation
-                        wx.CallAfter(self.moneyAdded, addMoney, new_amount)
-                        addMoney = 0
-                    else:
-                        if not self.userId: # if a user adds money while no one is logged in
-                            wx.CallAfter(self.appendLog, "No user logged in, log in to add the drink credits to your account")
-                        else:
-                            addMoney = 0
-                            wx.CallAfter(self.appendLog, "Could not add money to account, place contact a Drink Admin")
+                    self.last_money = datetime.now()
+                    if money_cache == 0:
+                        money_update = datetime.now()
+                    money_cache += int(data[2:])
+                    if datetime.now() - money_update > timedelta(seconds = 2):
+                        wx.CallAfter(self.appendMoney, "Counting: " + str(money_cache) + " credits")
+                        money_update = datetime.now()
                 else: # invalid input
                     connector.logging("Error: invalid input: " + str(data))
 
+            if (datetime.now() - self.last_money > timedelta(seconds = 1)) and money_cache:
+                conn = connector.PyLDAP(self.configFile)
+                new_amount = conn.incUsersCredits(self.userId, money_cache)
+                conn.close()
+                try:
+                    moneyInMachine = int(open(moneyLogName, "r").read())
+                    open(moneyLogName, "w").write(str(moneyInMachine + money_cache))
+                except Exception, e:
+                    open(moneyLogName, "w").write(str(money_cache))
+                if new_amount and self.logged_in: # good transcation
+                    wx.CallAfter(self.moneyAdded, money_cache, new_amount)
+                elif self.logged_in:
+                    wx.CallAfter(self.appendLog, "Could not add money to account, place contact a Drink Admin")
+                money_cache = 0
+
             # the user has been inactive for too long
-            if (datetime.now() - timeStamp) > timedelta(seconds = logoutTime) and self.userId:
+            elif (datetime.now() - timeStamp) > timedelta(seconds = logoutTime) and self.logged_in:
                 connector.logging("Info: logging " + str(self.userId) + " out due to timeout")
                 wx.CallAfter(self.logUserOut)
             time.sleep(0.5) # needed or else the inputs will not be read correctly
