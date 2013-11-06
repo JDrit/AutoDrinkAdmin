@@ -93,7 +93,11 @@ class CommThread(Thread):
         Called when the logout button is pressed
         """
         connector.logging("Info: " + str(self.userId) + " pressed the logout button")
-        wx.CallAfter(self.logUserOut)
+        if not self.logging_out:
+            self.logging_out_time = datetime.now() # the timer to measure the 2 second logout wait
+            self.logging_out = True
+        wx.CallAfter(self.appendLog, "Logging out...")
+        #wx.CallAfter(self.logUserOut)
 
     def logUserOut(self):
         """
@@ -132,10 +136,12 @@ class CommThread(Thread):
             self.ser.close()
 
         self.ser.open()
-        timeStamp = datetime.now()       # last time input from the arduino
-        self.last_money = datetime.now() # last time money was entered
-        money_update = datetime.now()    # used to update the money log
-        money_cache = 0                  # the amount of money cached on the machine
+        timeStamp = datetime.now()        # last time input from the arduino
+        self.last_money = datetime.now()  # last time money was entered
+        money_update = datetime.now()     # used to update the money log
+        money_cache = 0                   # the amount of money cached on the machine
+        self.logging_out_time = datetime.now() # the timer to measure the 2 second logout wait
+        self.logging_out = False
 
         # starts the heart beat for the arduino
         heart_beat_thread = Thread(target=heart_beat, args = (self,))
@@ -143,27 +149,32 @@ class CommThread(Thread):
 
         while True:
             data = self.ser.readline(999)
+            print data
             if len(data) > 1: # if there is input from the arduino
                 timeStamp = datetime.now()
+                self.logging_out = False # prevents the user from logging out when a input was recieved
                 connector.logging("Input: input from arduino: " + data)
                 if data.startswith('i:'): # iButton input
-                    if (not data[2:].upper() == self.currentIButtonId and
+                    if (not data[2:-2].upper() == self.currentIButtonId and
                             datetime.now() - self.last_money > timedelta(seconds=2)): # if not currently logged in user
-                        self.currentIButtonId = data[2:-2].upper()
-                        self.userId = connector.getUserId(self.currentIButtonId)
-                        if not self.userId:
-                            wx.CallAfter(self.logUserOut)
-                            wx.CallAfter(self.appendLog, "Could not authenticate user, please contact a drink admin")
+                        if not self.logged_in:
+                            self.currentIButtonId = data[2:-2].upper()
+                            self.userId = connector.getUserId(self.currentIButtonId)
+                            if not self.userId:
+                                wx.CallAfter(self.logUserOut)
+                                wx.CallAfter(self.appendLog, "Could not authenticate user, please contact a drink admin")
+                            else:
+                                wx.CallAfter(self.newUser)
+                                self.logged_in = True
+                                self.ser.write("a")
                         else:
-                            wx.CallAfter(self.newUser)
-                            self.logged_in = True
-                            self.ser.write("a")
+                            wx.CallAfter(self.appendLog, "You need to log out before a new user can log in")
                 elif data.startswith('m:'): # money input
                     self.last_money = datetime.now()
                     if money_cache == 0:
                         money_update = datetime.now()
                     money_cache += int(data[2:])
-                    if datetime.now() - money_update > timedelta(seconds = 2):
+                    if datetime.now() - money_update > timedelta(seconds = 2) and self.logged_in:
                         wx.CallAfter(self.appendMoney, "Counting: " + str(money_cache) + " credits")
                         money_update = datetime.now()
                 else: # invalid input
@@ -188,5 +199,12 @@ class CommThread(Thread):
             elif (datetime.now() - timeStamp) > timedelta(seconds = logoutTime) and self.logged_in:
                 connector.logging("Info: logging " + str(self.userId) + " out due to timeout")
                 wx.CallAfter(self.logUserOut)
+
+            if self.logging_out and datetime.now() - self.logging_out_time > timedelta(seconds = 2):
+                wx.CallAfter(self.logUserOut)
+
+
+
+
             time.sleep(0.5) # needed or else the inputs will not be read correctly
 

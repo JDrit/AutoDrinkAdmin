@@ -14,7 +14,9 @@ volatile int billsChange;           // 1 if the bill reader has had input, 0 oth
 String result;                      // result from the iButton reader
 byte ibutton_id[IBUTTON_ID_SIZE];   // data to hold the iButton ID
 volatile unsigned long highTime;    // the time of a high pulse from the coin reader
-int coinReader = 2; 
+volatile unsigned long lowTime;     // the time of a low pulse from the bill reader
+int coinReader = 2;                 // the pin for the coin reader 
+int billReader = 3;                 // the pin for the bill reader
 
 void setup()
 {
@@ -29,7 +31,8 @@ void setup()
   delay(500);
   digitalWrite(9, LOW);
   attachInterrupt(0, coinInserted, CHANGE);
-  attachInterrupt(1, billInserted, FALLING);
+//  attachInterrupt(1, billInserted, FALLING);
+  attachInterrupt(1, billInserted, CHANGE);
   digitalWrite(3, HIGH); // bill reader
 }
 
@@ -53,9 +56,18 @@ void coinInserted() {
  * interupt method for when the bill reader pulses
  */
 void billInserted() {
-  billsValue++;
-  billsChange = 1;
-  timeOfLastPulseBills = millis();
+//  billsValue++;
+//  billsChange = 1;
+//  timeOfLastPulseBills = millis();
+  if (digitalRead( billReader ) == LOW) {
+    lowTime = millis();
+  } else {
+    if (millis() - lowTime < 150) {
+      billsValue++;
+      billsChange = 1;
+      timeOfLastPulseBills = millis();
+    }
+  }
 }
 
 /*
@@ -102,7 +114,7 @@ void loop()
         result += '0';
       result += String(ibutton_id[i], HEX);
     }
-    Serial.print("i:" + result);
+    Serial.println("i:" + result);
     delay(1000);
     result = "";
   } else {
@@ -111,12 +123,12 @@ void loop()
   
   if (coinsChange == 1) {
     coinsChange = 0;
-    Serial.print("m:" + String(coinsValue));
+    Serial.println("m:" + String(coinsValue));
     coinsValue = 0;
   }
   if (billsChange == 1) {
     billsChange = 0;
-    Serial.print("m:" + String(billsValue * 100));
+    Serial.println("m:" + String(billsValue * 100));
     billsValue = 0;
   }
   
