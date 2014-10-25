@@ -8,16 +8,23 @@ Author:
     JD <jd@csh.rit.edu>
 """
 
-from threading import Thread
-from wx.lib.pubsub import Publisher
-from datetime import datetime, timedelta
-import ConfigParser
-import wx
+from datetime import datetime
 import time
-import ldap
-import socket
 import os
-import MySQLdb
+import requests
+
+drink_url = None
+money_log = None
+
+def init(money_log_name, api_key):
+    """
+    Used to set the configurations needed to work
+    """
+    global drink_url
+    global money_log
+    drink_url = ('https://webdrink.csh.rit.edu/api2/index.php?api_key=%s' % api_key) + "&request=%s"
+    money_log = money_log_name
+
 
 def logging(errorMessage, e=None):
     """
@@ -35,205 +42,46 @@ def logging(errorMessage, e=None):
     f = open(file_name, "a")
 
     f.write(timeStamp + ": " + errorMessage + "\n")
-    print errorMessage, e
+    print(errorMessage, e)
     if not e == None:
         f.write("\t" + str(e) + "\n")
     f.close()
 
-class PyLDAP():
+def user_info(ibutton):
     """
-    The class that connects to the CSH LDAP server to search / modify user's drink
-        credits
+    Gets the information about a user given their ibutton
     """
+    response = request.get(self.drink_url % '/users/info' + "&ibutton=%s" % ibutton)
+    return (response['data']['uid'],
+            int(response['data']['credits']),
+            response['data']['admin'] == '1')
 
-    def __init__(self, configFileName):
-        """
-        Sets up a connection to the LDAP server
-        """
-        self.configFile = configFileName
-        config = ConfigParser.ConfigParser()
-        config.read(self.configFile)
-        self.host = config.get("LDAP", "host")
-        self.bind_dn = config.get("LDAP", "bind_dn")
-        self.user_dn = config.get("LDAP", "user_dn")
-        self.password = config.get("LDAP", "password")
-        self.creditsField = 'drinkBalance' # the field that stores users' drink credits
-
-        try:
-            ldap.set_option(ldap.OPT_X_TLS_REQUIRE_CERT, ldap.OPT_X_TLS_NEVER)
-            self.conn = ldap.initialize(self.host)
-            self.conn.simple_bind_s(self.bind_dn, self.password)
-        except ldap.LDAPError, e:
-            logging("Error: could not bind to the host: " + self.host + " with bind: " + self.bind_dn, e)
-
-    def search(self, uid):
-        """
-        Searches through LDAP to get the data for the given user id
-        Parameters:
-            uid: the user ID to look for
-        Returns:
-            the data stored in LDAP for the given user, None if there
-            is an error searching LDAP
-        """
-        search_scope = ldap.SCOPE_SUBTREE
-        search_filter = "uid=" + str(uid)
-        result_set = []
-
-        try:
-            ldap_result_id = self.conn.search(self.user_dn, search_scope, search_filter, None)
-            while True:
-                result_type, result_data = self.conn.result(ldap_result_id, 0)
-                if result_data == []:
-                    break
-                else:
-                    if result_type == ldap.RES_SEARCH_ENTRY:
-                        result_set.append(result_data)
-            if result_set == []:
-                logging("Error: " + str(uid) + " does not exist in the LDAP server")
-                return
-            logging("Info: successful search for " + str(uid))
-            return result_set[0][0]
-        except ldap.LDAPError, e:
-            logging("Error: LDAP error while searching for " + str(uid), e)
-        except Exception, e:
-            logging("Error: unkown error while searching for " + str(uid), e)
-
-
-    def getUsersInformation(self, uid):
-        """
-        Gets the user's drink credits and their drink admin status
-        Parameters:
-            uid: the user ID to get the drink credits for
-        Returns:
-            - amount of drink credits
-            - the drink admin status
-            or None if it errors out
-        """
-        try:
-            if not uid:
-                logging("Error: User ID is None")
-                return
-            data = self.search(uid)[1]
-            if not data:
-                logging("Error: no LDAP data for " + str(uid))
-                return
-            amount = int(data[self.creditsField][0])
-            drinkAdmin = (int(data['drinkAdmin'][0]) == 1)
-            logging("Info: Successful fetch of " + str(uid) + "'s drink credits: " + str(amount) + " and drink admin status")
-            return amount, drinkAdmin
-        except ldap.LDAPError, e:
-            logging("Error: LDAP error while trying to get " + str(uid) + "'s information", e)
-        except Exception, e:
-            logging("Error: could not get drink credits for uid: " + str(uid), e)
-
-    def incUsersCredits(self, uid, amount):
-        """
-        Increments the user's drink credits by the given amount. The users drink
-            credits are refetched everytime so that if their balance increases
-            are decreases between the fetch and the increment, it does not
-            cause any problems. This could be exploited by fetching the user's
-            drink credits, buying a drink and then adding to their balance. This
-            would make it so the drink did not cost the user anything.
-        Parameters:
-            uid: the user's ID to search for
-            amount: the amount to increase the user's drink credits by
-        Returns:
-            the new amount of drink credits for the person if the change was successful,
-                None if the change failed
-        """
-        try:
-            data = self.getUsersInformation(uid)
-            if not data:
-                logging("Error: could not increment " + str(uid) + "'s drink credits since could not get LDAP data for user")
-                return
-            old_amount = int(data[0])
-            new_amount = old_amount + amount
-            mod_attrs = [(ldap.MOD_REPLACE, self.creditsField, str(new_amount))]
-            self.conn.modify_s("uid=" + uid + "," + self.user_dn, mod_attrs)
-            enterSQLLog(uid, amount, self.configFile)
-            logging("Info: Successful increment of " + uid  + "'s drink credits from " + str(old_amount) + " to " + str(new_amount))
-            return new_amount
-        except ldap.INSUFFICIENT_ACCESS, e:
-            logging("Error: Insufficient access to increments the drink credits for " + str(uid) + " by " + str(amount) ,e)
-        except ldap.LDAPError, e:
-            logging("Error: LDAP error while trying to increment " + str(uid) + "'s by " + str(amount), e)
-        except Exception, e:
-            logging("Error: could not increment by " + str(amount) + " for uid: " + str(uid), e)
-
-    def setUsersCredits(self, uid, amount):
-        """
-        Sets the user's drink credits to a given amount
-        Parameters:
-            uid: the user ID for the person to have their drink balance changed
-            amount: the amount of drink credits to set the person's balance to
-        Returns:
-            the new amount of drink credits for the user if the LDAP change was successful,
-                None if the change failed
-        """
-        try:
-            mod_attrs = [(ldap.MOD_REPLACE, self.creditsField, str(amount))]
-            self.conn.modify_s("uid=" + uid + "," + self.user_dn, mod_attrs)
-            logging("Info: Successful set of " + str(uid) + "'s drink credits to " + str(amount))
-            return amount
-        except ldap.INSUFFICIENT_ACCESS, e:
-            logging("Error: Insufficient access to set the " + str(uid) + "'s drink credits to " + str(amount), e)
-        except ldap.NO_SUCH_OBJECT, e:
-            logging("Error: the user " + str(uid) + " does not exist in LDAP", e)
-        except ldap.LDAPError, e:
-            logging("Error: LDAP error while trying to set " + str(uid) + "'s drink credits to " + str(amount), e)
-        except Exception, e:
-            Logging("Error: could not set " + str(uid) + "'s drink credits to " + str(amount), e)
-
-    def close(self):
-        self.conn.unbind()
-
-def getUserId(iButtonId):
+def increment_credits(uid, credits):
     """
-    Finds out the user's uid from their iButtonId by connecting to
-        totoro and using Russ's iButton2uid script
-    Parameters:
-        iButtonId: the iButton id of the user to search for
-    Returns:
-        The uid of the user if they exist, else it returns None
+    Updates the given user's drink credits and returns the user's new credits
     """
-    # the configs used to connect to Russ's script
-    TCP_ADDRESS = "totoro.csh.rit.edu"
-    TCP_PORT = 56123
-    BUFFER_SIZE = 1024
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    data = {'uid': uid, 'value': credits, 'type': 'add'}
+    response = requests.post(self.drink_url % 'users/credits', data = data).json()
+    logging(str(response))
     try:
-        s.connect((TCP_ADDRESS, TCP_PORT))
-        s.send(iButtonId + '\n')
-        data = s.recv(BUFFER_SIZE).rstrip()
-        logging("Info: Successful TCP request to " + TCP_ADDRESS + " to get user: " + data)
-        return data
-    except socket.error, e:
-        logging("Error: could not instantiate a socket to " + TCP_ADDRESS + " and send and recieve user data", e)
-    finally:
-        s.close()
+        with open(self.money_log, 'r') as f:
+            money_in_machine = int(f.read())
+        with open(self.money_log, 'w') as f:
+            f.write(str(money_in_machine + credits))
+    except Exception as e:
+        logging(str(e))
+        with open(self.money_log, 'w') as f:
+            f.write(str(credits))
+    return int(response['data'])
 
-def enterSQLLog(user, amount, configFile):
-    """
-    Enters the log into the log database table for the drink data
-    Parameters:
-        user: the username of the person who entered money
-        amount: the amount added to the account
-    """
+def money_in_machine():
     try:
-        config = ConfigParser.ConfigParser()
-        config.read(configFile)
-        conn = MySQLdb.connect(config.get("SQL", "host"),
-                config.get("SQL", "username"),
-                config.get("SQL", "password"),
-                config.get("SQL", "database"))
-        cur = conn.cursor()
-        sql = "INSERT INTO " + config.get("SQL", "table") + \
-            "(username, admin, amount, direction, reason) \
-            VALUES (%s, %s, %s, %s, %s)"
-        cur.execute(sql, (user, config.get("SQL", "adminName"), str(amount), 'in', 'add_money'))
-        conn.commit()
-        cur.close()
-        conn.close()
+        with open(self.money_log, 'r') as f:
+            return float(f.read())
+    except Exception as e:
+        reset_money_log()
+        return 0
 
-    except Exception, e:
-        logging("Error: could not write to database", e)
+def reset_money_log():
+    with open(self.money_log, 'w') as f:
+        f.write('0')

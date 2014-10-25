@@ -13,6 +13,7 @@ import argparse
 import daemon
 import ConfigParser
 import os
+import connector
 
 class AdminPopup(wx.PopupWindow):
     """
@@ -20,8 +21,13 @@ class AdminPopup(wx.PopupWindow):
         amount of money in box, etc.
     """
 
-    def __init__(self, parent, style, daemon, configFile):
-        self.configFile = configFile
+    def __init__(self, parent, style, daemon, config_file):
+        config = ConfigParser.ConfigParser()
+        config.read(config_file)
+
+        self.money_log_name = config.get('connector', 'moneyLog')
+        self.api_key = config.get('connector', 'apiKey')
+
         self.daemon = daemon
         wx.PopupWindow.__init__(self, parent, style)
         panel = self.panel = wx.Panel(self)
@@ -36,79 +42,67 @@ class AdminPopup(wx.PopupWindow):
         self.admin_title.SetFont(title_font)
         sizer.Add(self.admin_title, 1, wx.EXPAND|wx.ALL, 25)
 
-        config = ConfigParser.ConfigParser()
-        config.read(self.configFile)
-        try: # gets the amount of money in the box from the file
-            f = open(config.get("Logs", "moneyLog"), "r+")
-            self.money_log = wx.StaticText(panel, -1, "Money in Machine: $" + '{0:.02f}'.format(float(f.read()) / 100))
-        except Exception, e:
-            self.money_log = wx.StaticText(panel, -1, "Money in Machinr: $0.00")
-            f = open(config.get("Logs", "moneyLog"), "w")
-            f.write("0")
-        finally:
-            f.close()
+        self.money_log = wx.StaticText(panel, -1,
+                "$%s in machine" % '{0:.02f}'.format(
+                    connector.money_in_machine() / 100))
         self.money_log.SetFont(reg_font)
         sizer.Add(self.money_log, 1, wx.EXPAND|wx.ALL, 25)
 
         self.reset_but = wx.Button(self.panel, -1, "RESET COUNTER")
         self.reset_but.SetFont(title_font)
-        self.reset_but.Bind(wx.EVT_BUTTON, self.resetButton)
+        self.reset_but.Bind(wx.EVT_BUTTON, self.reset_button)
         sizer.Add(self.reset_but, 1, wx.EXPAND|wx.CENTER|wx.ALL, 20)
 
         self.close_but = wx.Button(self.panel, -1, "EXIT")
         self.close_but.SetFont(title_font)
-        self.close_but.Bind(wx.EVT_BUTTON, self.closeButton)
+        self.close_but.Bind(wx.EVT_BUTTON, self.close_button)
         sizer.Add(self.close_but, 1, wx.EXPAND|wx.ALL, 20)
 
         panel.SetSizerAndFit(sizer, wx.EXPAND)
         self.SetBestFittingSize()
         self.Center()
 
-    def openButton(self, event):
-        """
-        Sends the open command to the daemon which thens writes out to
-            the arduino over serial
-        """
-        self.daemon.openButton()
-
-    def resetButton(self, event):
+    def reset_button(self, event):
         """
         Used to reset the counter of how much money is in Auto Drink Admin
         """
-        config = ConfigParser.ConfigParser()
-        config.read(self.configFile)
-        open(config.get("Logs", "moneyLog"), "w").write("0")
+        connector.reset_money_log()
         self.money_log.SetLabel("Money in Machine: $0.00")
 
-    def closeButton(self, event):
+    def close_button(self, event):
         self.Show(False)
 
 class GUI(wx.Frame):
     """
     Main GUI for the UI
     """
-    def __init__(self, configFile):
+    def __init__(self, config_file):
         wx.Frame.__init__(self,
             None,
             wx.ID_ANY,
             "Auto Drink Admin"
         )
-        self.configFile = configFile
+        self.config_file = config_file
         self.panel = wx.Panel(self, wx.ID_ANY)
         self.ShowFullScreen(True) # sets the gui to full screeen
         self.sizer = wx.BoxSizer(wx.VERTICAL)
-        title_font = wx.Font(40, wx.FONTFAMILY_ROMAN, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD)
-        reg_font = wx.Font(22, wx.FONTFAMILY_ROMAN, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD)
-        log_font = wx.Font(18, wx.FONTFAMILY_ROMAN, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD)
+        title_font = wx.Font(40, wx.FONTFAMILY_ROMAN, wx.FONTSTYLE_NORMAL,
+                wx.FONTWEIGHT_BOLD)
+        reg_font = wx.Font(22, wx.FONTFAMILY_ROMAN, wx.FONTSTYLE_NORMAL,
+                wx.FONTWEIGHT_BOLD)
+        log_font = wx.Font(18, wx.FONTFAMILY_ROMAN, wx.FONTSTYLE_NORMAL,
+                wx.FONTWEIGHT_BOLD)
 
         title_bar = wx.BoxSizer(wx.HORIZONTAL)
         jpg = wx.Image('csh_logo.jpg', wx.BITMAP_TYPE_JPEG).ConvertToBitmap()
 
-        title_bar.Add(wx.StaticBitmap(self.panel, -1, jpg), 0, wx.ALIGN_LEFT|wx.ALL, 10)
+        title_bar.Add(wx.StaticBitmap(self.panel, -1, jpg), 0,
+                wx.ALIGN_LEFT|wx.ALL, 10)
         title_text = wx.StaticText(self.panel, -1, "Auto Drink Admin")
         title_text.SetFont(title_font)
         title_bar.Add(title_text, 1, wx.ALIGN_CENTER|wx.ALL, 10)
-        title_bar.Add(wx.StaticBitmap(self.panel, -1, jpg), 0, wx.ALIGN_RIGHT|wx.ALL, 10)
+        title_bar.Add(wx.StaticBitmap(self.panel, -1, jpg), 0,
+                wx.ALIGN_RIGHT|wx.ALL, 10)
 
         self.sizer.Add(title_bar, 2, wx.EXPAND|wx.ALL, 5)
 
@@ -122,12 +116,12 @@ class GUI(wx.Frame):
 
         self.logout_but = wx.Button(self.panel, -1, "LOGOUT")
         self.logout_but.SetFont(title_font)
-        self.logout_but.Bind(wx.EVT_BUTTON, self.logoutButton)
+        self.logout_but.Bind(wx.EVT_BUTTON, self.logout_button)
         self.sizer.Add(self.logout_but, 1, wx.ALL|wx.EXPAND, 10)
 
         self.admin_but = wx.Button(self.panel, -1, "ADMIN")
         self.admin_but.SetFont(title_font)
-        self.admin_but.Bind(wx.EVT_BUTTON, self.adminButton)
+        self.admin_but.Bind(wx.EVT_BUTTON, self.admin_button)
         self.sizer.Add(self.admin_but, 1, wx.ALL|wx.EXPAND, 10)
 
         self.log_sizer = wx.BoxSizer(wx.HORIZONTAL)
@@ -144,41 +138,46 @@ class GUI(wx.Frame):
         self.panel.SetSizerAndFit(self.sizer)
         self.money_text.Layout()
 
-        # sets up the listeners to listen for the messages from the background thread
-        Publisher().subscribe(self.appendLog, "appendLog")
-        Publisher().subscribe(self.appendMoney, "appendMoney")
-        Publisher().subscribe(self.updateLogout, "updateLogout")
-        Publisher().subscribe(self.newUser, "updateNewUser")
-        Publisher().subscribe(self.moneyAdded, "updateMoneyAdded")
-        self.daemon = daemon.CommThread(configFile)
+        Publisher().subscribe(self.append_log, "appendLog")
+        Publisher().subscribe(self.append_money, "appendMoney")
+        Publisher().subscribe(self.update_logout, "updateLogout")
+        Publisher().subscribe(self.new_user, "updateNewUser")
+        Publisher().subscribe(self.money_added, "updateMoneyAdded")
 
-    def logoutButton(self, event):
+        connector.init(self.money_log_name, self.api_key)
+
+        self.daemon = daemon.CommThread(config_file)
+
+    def logout_button(self, event):
         """
         Used when the logout button is pressed. This talks to the background thread
             owned by the GUI.
         """
-        self.daemon.logoutButton()
+        self.daemon.logout_button()
 
-    def adminButton(self, event):
-        win = AdminPopup(self.GetTopLevelParent(), wx.SIMPLE_BORDER, self.daemon, self.configFile)
+    def admin_button(self, event):
+        win = AdminPopup(self.GetTopLevelParent(), wx.SIMPLE_BORDER,
+                self.daemon, self.config_file)
         btn = event.GetEventObject()
         pos = btn.ClientToScreen( (0,0) )
         sz =  btn.GetSize()
         win.Show(True)
 
-    def appendLog(self, message):
+    def append_log(self, message):
         """
         Used to append a log message to the log when the background thread gets
             an update.
         Parameters:
             message: the message to add to the log
         """
-        self.log_text.SetLabel("Log:\n- " + message.data + self.log_text.GetLabel()[4:])
+        self.log_text.SetLabel("Log:\n- " + message.data +
+                self.log_text.GetLabel()[4:])
 
-    def appendMoney(self, message):
-        self.money_text.SetLabel("Money:\n- " + message.data + self.money_text.GetLabel()[6:])
+    def append_money(self, message):
+        self.money_text.SetLabel("Money:\n- " + message.data +
+                self.money_text.GetLabel()[6:])
 
-    def newUser(self, t):
+    def new_user(self, t):
         """
         Used when the background thread gets a new user to log in. This is used to
             clear the screen and display the new user's information
@@ -190,9 +189,10 @@ class GUI(wx.Frame):
         self.credits_text.SetLabel("Credits: " + str(tup[1]))
         self.admin_but.Show(tup[2])
         self.logout_but.Show()
-        self.log_text.SetLabel("Log:\n- " + tup[0] + " has successfully been logged in")
+        self.log_text.SetLabel("Log:\n- " + tup[0] +
+                " has successfully been logged in")
 
-    def moneyAdded(self, t):
+    def money_added(self, t):
         """
         Used when the background thread has added money to the user's account and
             wants to display it on the GUI.
@@ -204,12 +204,13 @@ class GUI(wx.Frame):
         self.log_text.SetLabel("Log:\n- " + tup[1] + self.log_text.GetLabel()[4:])
         self.money_text.SetLabel("Money:")
 
-    def updateLogout(self, n=None):
+    def update_logout(self, n=None):
         """
-        Used when the background thread has logged the current user out and wants to
-            wipe the screen of the user's information
+        Used when the background thread has logged the current user
+            out and wants to wipe the screen of the user's information
         Parameters:
-            n: nothing placeholder for the required parameter that needs to be passed
+            n: nothing placeholder for the required parameter that
+                needs to be passed
         """
         self.credits_text.SetLabel("Credits: ________")
         self.user_text.SetLabel("    User: ________")
@@ -220,8 +221,10 @@ class GUI(wx.Frame):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description = 'Start the Auto Drink Admin program')
-    parser.add_argument('--config', type=str, help='The config file to use', default='config')
+    parser = argparse.ArgumentParser(
+            description = 'Start the Auto Drink Admin program')
+    parser.add_argument('--config', type=str, help='The config file to use',
+            default='config')
     args = parser.parse_args()
     app = wx.PySimpleApp()
     if not os.path.exists(args.config):

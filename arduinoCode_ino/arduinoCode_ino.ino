@@ -31,7 +31,6 @@ void setup()
   delay(500);
   digitalWrite(9, LOW);
   attachInterrupt(0, coinInserted, CHANGE);
-//  attachInterrupt(1, billInserted, FALLING);
   attachInterrupt(1, billInserted, CHANGE);
   digitalWrite(3, HIGH); // bill reader
 }
@@ -44,7 +43,7 @@ void coinInserted() {
   if (digitalRead( coinReader ) == HIGH) {
     highTime = millis(); //get time of pulse going HIGH
    } else { 
-     if (millis() - highTime < 150) { // if the pulse width was less than 150, so no start up pulses
+     if (millis() - highTime < 150 && millis() - highTime > 20) { // if the pulse width was less than 150, so no start up pulses
       coinsValue++;
       coinsChange = 1;
       timeOfLastPulseCoins = millis();
