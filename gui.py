@@ -22,12 +22,6 @@ class AdminPopup(wx.PopupWindow):
     """
 
     def __init__(self, parent, style, daemon, config_file):
-        config = ConfigParser.ConfigParser()
-        config.read(config_file)
-
-        self.money_log_name = config.get('connector', 'moneyLog')
-        self.api_key = config.get('connector', 'apiKey')
-
         self.daemon = daemon
         wx.PopupWindow.__init__(self, parent, style)
         panel = self.panel = wx.Panel(self)
@@ -144,6 +138,14 @@ class GUI(wx.Frame):
         Publisher().subscribe(self.new_user, "updateNewUser")
         Publisher().subscribe(self.money_added, "updateMoneyAdded")
 
+        config = ConfigParser.ConfigParser()
+        config.read(config_file)
+
+        self.money_log_name = config.get('connector', 'moneyLog')
+        self.api_key = config.get('connector', 'apiKey')
+
+
+
         connector.init(self.money_log_name, self.api_key)
 
         self.daemon = daemon.CommThread(config_file)
@@ -228,7 +230,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     app = wx.PySimpleApp()
     if not os.path.exists(args.config):
-        print 'Error: No Config File'
+        print('Error: No Config File')
     else:
         frame = GUI(args.config).Show()
         app.MainLoop()

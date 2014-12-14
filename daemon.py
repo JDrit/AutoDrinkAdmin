@@ -57,7 +57,7 @@ class CommThread(Thread):
             Publisher.sendMessage('updateNewUser',
                     (self.user_id, drink_credits, admin_status))
         except Exception as e:
-            logging('Exception getting new user information', e = e)
+            connector.logging('Exception getting new user information', e = e)
             wx.CallAfter(self.append_log,
                 "Could not get user's information, please contact a drink admin")
 
@@ -115,10 +115,10 @@ class CommThread(Thread):
         self.logged_in = False
         config = ConfigParser.ConfigParser()
         config.read(self.config_file)
-        logout_time = config.getint("Daemon", "timeout")
+        logout_time = config.getint("daemon", "timeout")
 
         self.ser = serial.Serial(
-            port = config.get("Daemon", "port"),
+            port = config.get("daemon", "port"),
             baudrate = 9600,
             timeout = 0
         )

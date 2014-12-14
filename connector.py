@@ -22,7 +22,7 @@ def init(money_log_name, api_key):
     """
     global drink_url
     global money_log
-    drink_url = ('https://webdrink.csh.rit.edu/api2/index.php?api_key=%s' % api_key) + "&request=%s"
+    drink_url = ('https://webdrink.csh.rit.edu/api/index.php?api_key=%s' % api_key) + "&request=%s"
     money_log = money_log_name
 
 
@@ -51,7 +51,7 @@ def user_info(ibutton):
     """
     Gets the information about a user given their ibutton
     """
-    response = request.get(self.drink_url % '/users/info' + "&ibutton=%s" % ibutton)
+    response = requests.get(drink_url % 'users/info' + "&ibutton=%s" % ibutton).json
     return (response['data']['uid'],
             int(response['data']['credits']),
             response['data']['admin'] == '1')
@@ -61,27 +61,27 @@ def increment_credits(uid, credits):
     Updates the given user's drink credits and returns the user's new credits
     """
     data = {'uid': uid, 'value': credits, 'type': 'add'}
-    response = requests.post(self.drink_url % 'users/credits', data = data).json()
+    response = requests.post(drink_url % 'users/credits', data = data).json
     logging(str(response))
     try:
-        with open(self.money_log, 'r') as f:
+        with open(money_log, 'r') as f:
             money_in_machine = int(f.read())
-        with open(self.money_log, 'w') as f:
+        with open(money_log, 'w') as f:
             f.write(str(money_in_machine + credits))
     except Exception as e:
         logging(str(e))
-        with open(self.money_log, 'w') as f:
+        with open(money_log, 'w') as f:
             f.write(str(credits))
     return int(response['data'])
 
 def money_in_machine():
     try:
-        with open(self.money_log, 'r') as f:
+        with open(money_log, 'r') as f:
             return float(f.read())
     except Exception as e:
         reset_money_log()
         return 0
 
 def reset_money_log():
-    with open(self.money_log, 'w') as f:
+    with open(money_log, 'w') as f:
         f.write('0')
